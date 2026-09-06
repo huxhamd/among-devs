@@ -1,0 +1,9 @@
+node_modules
+.svelte-kit
+build
+dist
+.git
+.env*
+test-results
+.npm-cache
+.azure-local

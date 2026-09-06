@@ -1,0 +1,208 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Session } from '../server/session.ts';
+import { STATIONS } from '../src/lib/shared.ts';
+
+function setup(count = 4) {
+  const room = new Session('ABC234');
+  for (let i = 0; i < count; i++) room.join(`Person ${i}`, `socket-${i}`, undefined, 1000);
+  room.action(room.host, { type: 'start' }, 1000);
+  return room;
+}
+test('lobbies enforce minimum, maximum, unique names and host control', () => {
+  const room = new Session('ABC234');
+  const host = room.join('Host', 'one');
+  assert.throws(() => room.action(host.id, { type: 'start' }), /3–10/);
+  assert.throws(() => room.join('host', 'two'), /already taken/);
+  for (let i = 1; i < 10; i++) room.join(`P${i}`, `s${i}`);
+  assert.throws(() => room.join('Extra', 'extra'), /full/);
+  assert.throws(() => room.action(room.players[1].id, { type: 'start' }), /host/);
+});
+test('exactly one tester; snapshots do not disclose credentials or other roles', () => {
+  const room = setup(10);
+  assert.equal(room.players.filter((p) => p.role === 'tester').length, 1);
+  const snapshot = room.snapshot(room.host, 1000);
+  for (const person of snapshot.players) {
+    assert.equal('role' in person, false);
+    assert.equal('token' in person, false);
+    assert.equal('socket' in person, false);
+  }
+  assert.equal(snapshot.total, 36);
+});
+test('movement is bounded by elapsed time and walls', () => {
+  const room = setup();
+  const person = room.players[0];
+  person.x = 290;
+  person.y = 100;
+  room.action(person.id, { type: 'move', dx: 999999, dy: 0 }, 1100);
+  assert.equal(person.x, 290);
+  room.action(person.id, { type: 'move', dx: 0, dy: 999999 }, 1200);
+  assert.equal(person.y, 119);
+  room.action(person.id, { type: 'move', dx: NaN, dy: 0 }, 1300);
+  assert.equal(person.x, 290);
+});
+test('task proximity, answers, deduplication, sabotage and dev victory', () => {
+  const room = setup();
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  const dev = room.players.find((p) => p.role === 'dev')!;
+  assert.throws(
+    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000),
+    /closer/
+  );
+  dev.x = 160;
+  dev.y = 130;
+  assert.throws(
+    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'ours' }, 30000),
+    /refinement/
+  );
+  room.action(tester.id, { type: 'sabotage' }, 30000);
+  assert.throws(
+    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000),
+    /Repair/
+  );
+  dev.x = 840;
+  room.action(dev.id, { type: 'repair' }, 30000);
+  tester.x = 160;
+  tester.y = 130;
+  room.action(tester.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);
+  assert.equal(room.snapshot(dev.id).progress, 0);
+  for (const person of room.players.filter((p) => p.role === 'dev'))
+    for (const station of STATIONS) {
+      person.x = station.x;
+      person.y = station.y;
+      room.action(person.id, { type: 'task', station: station.id, answer: station.answer }, 30000);
+      if (room.phase !== 'ended')
+        room.action(
+          person.id,
+          { type: 'task', station: station.id, answer: station.answer },
+          30000
+        );
+    }
+  assert.equal(room.winner, 'dev');
+  assert.equal(room.snapshot(dev.id).progress, 12);
+});
+test('votes are final, resolve privately and pause the work deadline', () => {
+  const room = setup();
+  const caller = room.players[0];
+  caller.x = 500;
+  caller.y = 310;
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  room.action(caller.id, { type: 'meeting' }, 30000);
+  const original = room.deadline;
+  room.action(caller.id, { type: 'vote', target: tester.id }, 31000);
+  assert.throws(() => room.action(caller.id, { type: 'vote', target: 'skip' }, 31000), /already/);
+  assert.equal(room.snapshot(room.players[1].id).meeting?.yourVote, null);
+  for (const person of room.players.slice(1))
+    room.action(person.id, { type: 'vote', target: tester.id }, 35000);
+  assert.equal(room.winner, 'dev');
+  assert.equal(room.deadline, original + 5000);
+});
+test('a tied vote and abstentions send nobody on training', () => {
+  const room = setup();
+  const caller = room.players[0];
+  caller.x = 500;
+  caller.y = 310;
+  room.action(caller.id, { type: 'meeting' }, 30000);
+  room.players.forEach((p, i) =>
+    room.action(p.id, { type: 'vote', target: room.players[i % 2].id }, 31000)
+  );
+  assert.equal(
+    room.players.every((p) => p.active),
+    true
+  );
+  const other = room.players[1];
+  other.x = 500;
+  other.y = 310;
+  room.action(other.id, { type: 'meeting' }, 32000);
+  room.action(other.id, { type: 'vote', target: room.players[2].id }, 33000);
+  room.tick(72000);
+  assert.equal(
+    room.players.every((p) => p.active),
+    true
+  );
+});
+test('three-person rounds cannot end on the first training action', () => {
+  const room = setup(3);
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  assert.throws(
+    () =>
+      room.action(
+        tester.id,
+        { type: 'sideline', target: room.players.find((p) => p.role === 'dev')!.id },
+        30000
+      ),
+    /three/
+  );
+  room.tick(241000);
+  assert.equal(room.winner, 'tester');
+});
+test('training requires the tester and cooldown; trainees can still work', () => {
+  const room = setup(5);
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  const dev = room.players.find((p) => p.role === 'dev')!;
+  dev.x = tester.x;
+  dev.y = tester.y;
+  assert.throws(
+    () => room.action(dev.id, { type: 'sideline', target: tester.id }, 30000),
+    /unavailable/
+  );
+  assert.throws(
+    () => room.action(tester.id, { type: 'sideline', target: dev.id }, 2000),
+    /unavailable/
+  );
+  room.action(tester.id, { type: 'sideline', target: dev.id }, 30000);
+  assert.equal(dev.active, false);
+  assert.throws(() => room.action(dev.id, { type: 'meeting' }, 30000), /training/);
+  dev.x = 160;
+  dev.y = 130;
+  room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);
+  assert.equal(dev.completed.length, 1);
+});
+test('reconnect restores a seat and disconnected host transfers ownership', () => {
+  const room = setup();
+  const oldHost = room.players[0];
+  room.disconnect(oldHost.socket!, 30000);
+  assert.notEqual(room.host, oldHost.id);
+  const resumed = room.join(oldHost.name, 'new-socket', oldHost.token, 35000);
+  assert.equal(resumed.id, oldHost.id);
+  assert.equal(room.players.length, 4);
+  assert.throws(() => room.join(oldHost.name, 'duplicate', oldHost.token), /already connected/);
+  room.disconnect('new-socket', 36000);
+  room.tick(96001);
+  assert.equal(room.phase, 'ended');
+  assert.equal(room.winner, null);
+});
+
+test('distant colleagues and colleagues behind walls are hidden by the server', () => {
+  const room = setup();
+  const [viewer, other] = room.players;
+  viewer.x = 290;
+  viewer.y = 100;
+  other.x = 355;
+  other.y = 100;
+  const hidden = room.snapshot(viewer.id).players.find((p) => p.id === other.id)!;
+  assert.equal(hidden.visible, false);
+  assert.equal(hidden.x, 0);
+  assert.equal(hidden.y, 0);
+  assert.equal(room.nearby(viewer, other, 80), false);
+  viewer.y = 225;
+  other.y = 225;
+  assert.equal(room.snapshot(viewer.id).players.find((p) => p.id === other.id)!.visible, true);
+  other.x = 840;
+  assert.equal(room.snapshot(viewer.id).players.find((p) => p.id === other.id)!.visible, false);
+});
+
+test('training notices stay in place while a trainee moves', () => {
+  const room = setup(5);
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  const dev = room.players.find((p) => p.role === 'dev')!;
+  dev.x = tester.x;
+  dev.y = tester.y;
+  const position = { x: dev.x, y: dev.y };
+  room.action(tester.id, { type: 'sideline', target: dev.id }, 30000);
+  room.action(dev.id, { type: 'move', dx: 0, dy: 1 }, 30100);
+  assert.notEqual(dev.y, position.y);
+  assert.equal(room.snapshot(tester.id).players.find((p) => p.id === dev.id)!.y, position.y);
+  room.action(tester.id, { type: 'report' }, 30200);
+  assert.equal(room.phase, 'meeting');
+});

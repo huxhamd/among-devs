@@ -1,0 +1,121 @@
+export const COLORS = [
+  '#a5b4fc',
+  '#fda4af',
+  '#5eead4',
+  '#fcd34d',
+  '#c4b5fd',
+  '#fdba74',
+  '#7dd3fc',
+  '#bef264',
+  '#f0abfc',
+  '#cbd5e1'
+];
+export const WIDTH = 1000;
+export const HEIGHT = 620;
+export const STATIONS = [
+  {
+    id: 'merge',
+    name: 'Resolve a merge conflict',
+    room: 'Development',
+    x: 160,
+    y: 130,
+    symbol: '⌘',
+    answer: 'both',
+    prompt: 'Two branches contain useful changes. Keep…',
+    options: ['ours', 'theirs', 'both']
+  },
+  {
+    id: 'build',
+    name: 'Restart the pipeline',
+    room: 'Server cupboard',
+    x: 840,
+    y: 130,
+    symbol: '▥',
+    answer: 'retry',
+    prompt: 'CI failed because Mercury is in retrograde. Try…',
+    options: ['retry', 'panic', 'blame DNS']
+  },
+  {
+    id: 'coffee',
+    name: 'Refill the coffee machine',
+    room: 'Kitchen',
+    x: 160,
+    y: 490,
+    symbol: '☕',
+    answer: 'beans',
+    prompt: 'The team is running on empty. Add…',
+    options: ['story points', 'beans', 'another meeting']
+  },
+  {
+    id: 'ticket',
+    name: 'Find the acceptance criteria',
+    room: 'Product corner',
+    x: 840,
+    y: 490,
+    symbol: '✓',
+    answer: 'ticket',
+    prompt: 'Where should the acceptance criteria live?',
+    options: ['someone’s head', 'ticket', 'a lost sticky note']
+  }
+] as const;
+// Dividers have wide, visible doorways. Server and client share collision geometry.
+export const WALLS = [
+  { x: 315, y: 0, w: 18, h: 185 },
+  { x: 315, y: 265, w: 18, h: 95 },
+  { x: 315, y: 440, w: 18, h: 180 },
+  { x: 667, y: 0, w: 18, h: 185 },
+  { x: 667, y: 265, w: 18, h: 95 },
+  { x: 667, y: 440, w: 18, h: 180 },
+  { x: 0, y: 302, w: 315, h: 16 },
+  { x: 685, y: 302, w: 315, h: 16 }
+];
+export type Phase = 'lobby' | 'work' | 'meeting' | 'ended';
+export type Role = 'dev' | 'tester';
+export type Person = {
+  id: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  active: boolean;
+  connected: boolean;
+  reported: boolean;
+  visible: boolean;
+};
+export type Snapshot = {
+  code: string;
+  host: string;
+  phase: Phase;
+  players: Person[];
+  self: string;
+  role: Role | null;
+  tasks: string[];
+  completed: string[];
+  progress: number;
+  total: number;
+  deadline: number;
+  now: number;
+  cooldown: number;
+  sabotageReady: number;
+  incident: boolean;
+  meetingsLeft: number;
+  meeting: { caller: string; deadline: number; votes: string[]; yourVote: string | null } | null;
+  result: string;
+  winner: Role | null;
+};
+export type Action =
+  | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'repair' | 'report' }
+  | { type: 'move'; dx: number; dy: number }
+  | { type: 'sideline'; target: string }
+  | { type: 'task'; station: string; answer: string }
+  | { type: 'vote'; target: string };
+export type Reply = { error?: string; token?: string; code?: string };
+export function walkable(x: number, y: number) {
+  return (
+    x >= 20 &&
+    y >= 20 &&
+    x <= WIDTH - 20 &&
+    y <= HEIGHT - 20 &&
+    !WALLS.some((w) => x > w.x - 15 && x < w.x + w.w + 15 && y > w.y - 15 && y < w.y + w.h + 15)
+  );
+}

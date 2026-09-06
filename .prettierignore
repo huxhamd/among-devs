@@ -1,0 +1,8 @@
+node_modules
+.npm-cache
+.svelte-kit
+build
+dist
+package-lock.json
+test-results
+.azure-local
