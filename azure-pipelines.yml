@@ -19,9 +19,9 @@ stages:
         steps:
           - checkout: self
             path: s/app
-          - task: NodeTool@0
+          - task: UseNode@1
             inputs:
-              versionSpec: 24.x
+              version: 24.x
           - bash: |
               set -euo pipefail
               az bicep build --file infra/main.bicep --stdout > /dev/null
@@ -57,9 +57,9 @@ stages:
                   path: s/app
                 - download: current
                   artifact: image
-                - task: NodeTool@0
+                - task: UseNode@1
                   inputs:
-                    versionSpec: 24.x
+                    version: 24.x
                 - bash: |
                     set -euo pipefail
                     docker load --input "$(Pipeline.Workspace)/image/among-devs.tar.gz"

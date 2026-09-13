@@ -17,9 +17,6 @@ resource environment 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: 'cae-${appName}-uks'
   location: location
   properties: {
-    appLogsConfiguration: {
-      destination: 'none'
-    }
     workloadProfiles: [
       {
         name: 'Consumption'
