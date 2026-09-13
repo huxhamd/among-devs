@@ -45,24 +45,49 @@ docker run --rm -p 3000:3000 -e ORIGIN=http://localhost:3000 among-devs
 
 The multi-stage image runs checks, tests and the build, then runs as the unprivileged Node user with only production dependencies. On a public hostname, set `ORIGIN` to that exact HTTPS origin, without a trailing slash. Behind Azure's trusted ingress, the Bicep template uses forwarded protocol/host headers instead.
 
-## Azure, with small recurring costs
+## Azure pipelines (personal environment)
 
-`infra/main.bicep` provisions a Consumption Container Apps environment and one app with HTTPS ingress, 0.25 vCPU, 0.5 GiB memory, a health probe, single revision mode, and a maximum of **one replica**. Supply your built container image. A private registry is supported through secure deployment parameters; do not commit credentials. Nothing is deployed automatically.
+The app stays in GitHub at `huxhamd/among-devs`. Azure DevOps project `danhuxham/among-devs` runs these pipelines:
 
-1. Build and push the container to a registry you control (for example, use `az acr build --registry YOUR_REGISTRY --image among-devs:v1 .` with an existing private Azure Container Registry).
-2. Create a resource group in your preferred region.
-3. Deploy `infra/main.bicep`, supplying `image`, and `registryServer`, `registryUsername`, and the secure `registryPassword` parameter for a private registry. Use a secure parameter source rather than a password in shell history. The template outputs the HTTPS URL.
-4. Open the URL before your session. Test joining from your work browser and another colleague's device. For predictable warm sessions, deploy with `minReplicas=1`, then return it to `0` afterwards. Connected browsers should be closed when finished.
+| Pipeline                | YAML                           | Behaviour                                                                                                                                                            |
+| ----------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build and deploy        | `azure-pipelines.yml`          | Every branch push and PR to `master` checks, tests, builds and smoke-tests the container. Only `master` deploys. Run manually on `master` to stand the app up again. |
+| Validate infrastructure | `azure-pipelines.validate.yml` | Manual Bicep compilation and Azure what-if; does not deploy.                                                                                                         |
+| Destroy                 | `azure-pipelines.destroy.yml`  | Manual; requires `DESTROY-among-devs` and runs from `master`.                                                                                                        |
+| Monthly health          | `azure-pipelines.health.yml`   | First day of each month at 07:00 UTC, or manually. Checks Azure access, the registry, and what-if. Works while the app is torn down.                                 |
 
-Example for an image whose registry does not require authentication:
+The pipeline reuses the platform's `templates/container-app/v1/infra/main.bicep`, pinned to commit `d2c456d0e343b67bc2b5379e764609edfbb5f36c` (`container-app-v1.0.0`). The app-specific orchestration supports `master`, Node 24, and the custom Socket.IO entry point. The existing Dockerfile runs checks and tests, builds both `build/` and `dist/`, and runs `dist/server.js` as the unprivileged Node user. The deployment loads the exact image tested by the build stage; it does not rebuild it.
 
-```sh
-az deployment group create --resource-group YOUR_RESOURCE_GROUP --template-file infra/main.bicep --parameters image=YOUR_IMAGE minReplicas=0
+The application owns deployment stack `app-among-devs`, resource group `rg-among-devs-uks`, a Consumption Container Apps environment, one Container App, and a managed identity. The identity gets `AcrPull` on the existing shared registry `acrplayobbyonpr53zda`. There are no registry passwords, database, or saved Log Analytics logs. Destruction removes the app stack and its registry role assignment, retaining the shared registry and pushed images. No shared infrastructure changes are required.
+
+The app uses UK South, 0.25 vCPU, 0.5 GiB memory, a minimum of zero replicas and a maximum of one. Deployments and scale-to-zero lose in-memory games. Deploy between sessions, and close connected browsers when finished. Each deployment verifies the page, `/healthz`, and three WebSocket lobby joins; the HTTPS URL is printed in the deployment log. The monthly health pipeline makes no request to the application and never deploys it.
+
+### One-time Azure DevOps setup
+
+- Connect GitHub repository `huxhamd/among-devs` with the Azure Pipelines GitHub App and create the four pipeline definitions above, with default branch `refs/heads/master`.
+- Create workload-federated ARM service connection `sc-play-among-devs` targeting personal tenant `72e6af23-d94b-40db-ad70-1c01042f48c1`, subscription `968d16ad-8f5a-4608-aaca-1facd4121402`. The scripts refuse any other tenant or subscription.
+- Grant its identity subscription `Contributor` for the application resource group/stack, plus registry-scoped `AcrPush` and `Role Based Access Control Administrator` for the runtime identity's pull assignment. Keep the ACR admin account disabled. Authorize only these four pipelines to use the connection.
+- Give the project's Build Service read access to the `platform-infrastructure/platform-infrastructure` Azure Repo and authorize it for the three pipelines that consume its template.
+- Create environment `among-devs-play`, authorize the build/deploy and destroy pipelines, and add an **Exclusive lock** check. Both YAML files request sequential locking so teardown and deployment cannot run concurrently.
+- Confirm Microsoft-hosted Linux agent capacity is available. Keep fork builds from receiving secrets or privileged pipeline access. Set short run retention to avoid retaining unnecessary image artifacts.
+
+### Cost and teardown
+
+The target is at most £5/month of additional usage, excluding the already-deployed shared registry. Consumption has a subscription-wide free allowance; a zero-replica app incurs no compute consumption charge. This is a usage-based service, so £5 is a target, not an enforced spending cap. See [Azure Container Apps billing](https://learn.microsoft.com/en-us/azure/container-apps/billing).
+
+Use **Destroy** when finished and **Build and deploy** on `master` when needed again. A later push to `master` also recreates a destroyed app. Image tags are commit SHAs and remain in the shared registry after teardown; prune obsolete `among-devs` images if storage accumulates, keeping images needed for rollback. A budget alert can notify you about spend, but does not stop resources automatically.
+
+### Local infrastructure preview
+
+Use `az-play` locally; never switch the default Azure CLI profile. In Azure Pipelines, `AzureCLI@2` supplies an isolated service-connection login and the same script verifies its tenant and subscription.
+
+```powershell
+$env:TEMPLATE_FILE = 'C:\Users\DanielHuxham\source\repos\platform-infra\templates\container-app\v1\infra\main.bicep'
+$env:IMAGE_TAG = git rev-parse HEAD
+& .\scripts\infra.ps1 -Mode Preview
 ```
 
-Azure Container Apps supports WebSockets and consumption scale-to-zero. No resource consumption is charged for an app scaled to zero, but a private registry, logs, networking, and other resources can still incur charges. Actual charges depend on your region, usage and subscription. Set a small Azure budget alert. This template does not provision a registry or a Log Analytics workspace.
-
-Sources: [Azure ingress](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview), [billing](https://learn.microsoft.com/en-us/azure/container-apps/billing), [pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/), [SvelteKit Node adapter](https://svelte.dev/docs/kit/adapter-node).
+Ensure the local platform checkout matches the pinned release before comparing its preview to CI. `node scripts/smoke.mjs https://YOUR-APP-HOSTNAME` can also be run with Node 24 after `npm ci` to verify a running deployment.
 
 ## Scope and tradeoffs
 

@@ -1,0 +1,26 @@
+trigger: none
+pr: none
+schedules:
+  - cron: '0 7 1 * *'
+    displayName: Monthly authentication and infrastructure preview
+    branches:
+      include: [master]
+    always: true
+resources:
+  repositories:
+    - repository: platformTemplates
+      type: git
+      name: platform-infrastructure/platform-infrastructure
+      ref: d2c456d0e343b67bc2b5379e764609edfbb5f36c
+variables:
+  - template: pipelines/variables.yml
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    path: s/app
+  - checkout: platformTemplates
+    path: s/platform-templates
+  - template: pipelines/azure-step.yml
+    parameters:
+      mode: Health

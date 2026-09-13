@@ -1,0 +1,2 @@
+variables:
+  azureServiceConnection: sc-play-among-devs

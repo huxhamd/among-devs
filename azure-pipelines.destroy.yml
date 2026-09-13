@@ -1,0 +1,28 @@
+trigger: none
+pr: none
+parameters:
+  - name: confirmation
+    displayName: Type DESTROY-among-devs to delete the application
+    type: string
+    default: 'NOT-CONFIRMED'
+variables:
+  - template: pipelines/variables.yml
+stages:
+  - stage: Destroy
+    lockBehavior: sequential
+    jobs:
+      - deployment: Destroy
+        environment: among-devs-play
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  path: s/app
+                - download: none
+                - template: pipelines/azure-step.yml
+                  parameters:
+                    mode: Destroy
+                    confirmation: ${{ parameters.confirmation }}

@@ -7,3 +7,6 @@ dist
 test-results
 .npm-cache
 .azure-local
+azure-pipelines*.yml
+pipelines
+scripts
