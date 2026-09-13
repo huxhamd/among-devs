@@ -7,14 +7,6 @@ pr:
   branches:
     include: [master]
 
-resources:
-  repositories:
-    - repository: platformTemplates
-      type: git
-      name: platform-infrastructure/platform-infrastructure
-      # container-app-v1.0.0, pinned to its immutable commit.
-      ref: d2c456d0e343b67bc2b5379e764609edfbb5f36c
-
 variables:
   - template: pipelines/variables.yml
 
@@ -27,14 +19,12 @@ stages:
         steps:
           - checkout: self
             path: s/app
-          - checkout: platformTemplates
-            path: s/platform-templates
           - task: NodeTool@0
             inputs:
               versionSpec: 24.x
           - bash: |
               set -euo pipefail
-              az bicep build --file ../platform-templates/templates/container-app/v1/infra/main.bicep --stdout > /dev/null
+              az bicep build --file infra/main.bicep --stdout > /dev/null
               npm ci
               docker build --tag "among-devs:$IMAGE_TAG" .
               docker run --detach --name among-devs-smoke --publish 3000:3000 --env ORIGIN=http://localhost:3000 "among-devs:$IMAGE_TAG"
@@ -65,8 +55,6 @@ stages:
               steps:
                 - checkout: self
                   path: s/app
-                - checkout: platformTemplates
-                  path: s/platform-templates
                 - download: current
                   artifact: image
                 - task: NodeTool@0

@@ -56,9 +56,9 @@ The app stays in GitHub at `huxhamd/among-devs`. Azure DevOps project `danhuxham
 | Destroy                 | `azure-pipelines.destroy.yml`  | Manual; requires `DESTROY-among-devs` and runs from `master`.                                                                                                        |
 | Monthly health          | `azure-pipelines.health.yml`   | First day of each month at 07:00 UTC, or manually. Checks Azure access, the registry, and what-if. Works while the app is torn down.                                 |
 
-The pipeline reuses the platform's `templates/container-app/v1/infra/main.bicep`, pinned to commit `d2c456d0e343b67bc2b5379e764609edfbb5f36c` (`container-app-v1.0.0`). The app-specific orchestration supports `master`, Node 24, and the custom Socket.IO entry point. The existing Dockerfile runs checks and tests, builds both `build/` and `dist/`, and runs `dist/server.js` as the unprivileged Node user. The deployment loads the exact image tested by the build stage; it does not rebuild it.
+The application infrastructure in `infra/main.bicep` follows the platform Container App template while using pre-provisioned identities. This keeps pipeline permissions scoped to this application's resource group and avoids giving a pipeline permission to assign Azure roles. The orchestration supports `master`, Node 24, and the custom Socket.IO entry point. The existing Dockerfile runs checks and tests, builds both `build/` and `dist/`, and runs `dist/server.js` as the unprivileged Node user. The deployment loads the exact image tested by the build stage; it does not rebuild it.
 
-The application owns deployment stack `app-among-devs`, resource group `rg-among-devs-uks`, a Consumption Container Apps environment, one Container App, and a managed identity. The identity gets `AcrPull` on the existing shared registry `acrplayobbyonpr53zda`. There are no registry passwords, database, or saved Log Analytics logs. Destruction removes the app stack and its registry role assignment, retaining the shared registry and pushed images. No shared infrastructure changes are required.
+The application deployment stack owns a Consumption Container Apps environment and one Container App in `rg-among-devs-uks`. Persistent identity `id-runtime-among-devs` has `AcrPull` on the existing shared registry `acrplayobbyonpr53zda`; deployment identity `id-ado-among-devs` has `Contributor` only on the app resource group and `AcrPush` only on the registry. There are no registry passwords, database, or saved Log Analytics logs. Destruction removes the app runtime resources while retaining the empty resource group, identities, registry, and pushed images. No shared infrastructure changes are required.
 
 The app uses UK South, 0.25 vCPU, 0.5 GiB memory, a minimum of zero replicas and a maximum of one. Deployments and scale-to-zero lose in-memory games. Deploy between sessions, and close connected browsers when finished. Each deployment verifies the page, `/healthz`, and three WebSocket lobby joins; the HTTPS URL is printed in the deployment log. The monthly health pipeline makes no request to the application and never deploys it.
 
@@ -66,8 +66,7 @@ The app uses UK South, 0.25 vCPU, 0.5 GiB memory, a minimum of zero replicas and
 
 - Connect GitHub repository `huxhamd/among-devs` with the Azure Pipelines GitHub App and create the four pipeline definitions above, with default branch `refs/heads/master`.
 - Create workload-federated ARM service connection `sc-play-among-devs` targeting personal tenant `72e6af23-d94b-40db-ad70-1c01042f48c1`, subscription `968d16ad-8f5a-4608-aaca-1facd4121402`. The scripts refuse any other tenant or subscription.
-- Grant its identity subscription `Contributor` for the application resource group/stack, plus registry-scoped `AcrPush` and `Role Based Access Control Administrator` for the runtime identity's pull assignment. Keep the ACR admin account disabled. Authorize only these four pipelines to use the connection.
-- Give the project's Build Service read access to the `platform-infrastructure/platform-infrastructure` Azure Repo and authorize it for the three pipelines that consume its template.
+- Grant its identity `Contributor` on `rg-among-devs-uks` and `AcrPush` on the shared registry. The pipeline does not receive subscription-wide access or permission to manage Azure roles. Keep the ACR admin account disabled. Authorize only these four pipelines to use the connection.
 - Create environment `among-devs-play`, authorize the build/deploy and destroy pipelines, and add an **Exclusive lock** check. Both YAML files request sequential locking so teardown and deployment cannot run concurrently.
 - Confirm Microsoft-hosted Linux agent capacity is available. Keep fork builds from receiving secrets or privileged pipeline access. Set short run retention to avoid retaining unnecessary image artifacts.
 
@@ -82,12 +81,11 @@ Use **Destroy** when finished and **Build and deploy** on `master` when needed a
 Use `az-play` locally; never switch the default Azure CLI profile. In Azure Pipelines, `AzureCLI@2` supplies an isolated service-connection login and the same script verifies its tenant and subscription.
 
 ```powershell
-$env:TEMPLATE_FILE = 'C:\Users\DanielHuxham\source\repos\platform-infra\templates\container-app\v1\infra\main.bicep'
 $env:IMAGE_TAG = git rev-parse HEAD
 & .\scripts\infra.ps1 -Mode Preview
 ```
 
-Ensure the local platform checkout matches the pinned release before comparing its preview to CI. `node scripts/smoke.mjs https://YOUR-APP-HOSTNAME` can also be run with Node 24 after `npm ci` to verify a running deployment.
+`node scripts/smoke.mjs https://YOUR-APP-HOSTNAME` can also be run with Node 24 after `npm ci` to verify a running deployment.
 
 ## Scope and tradeoffs
 

@@ -18,5 +18,4 @@ steps:
       visibleAzLogin: false
     env:
       IMAGE_TAG: $(Build.SourceVersion)
-      TEMPLATE_FILE: $(Pipeline.Workspace)/s/platform-templates/templates/container-app/v1/infra/main.bicep
       CONFIRMATION: ${{ parameters.confirmation }}
