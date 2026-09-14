@@ -7,6 +7,7 @@
     STATIONS,
     WALLS,
     atCiConsole,
+    nearestWithin,
     type Snapshot,
     type Action,
     type Reply
@@ -45,10 +46,13 @@
   let atTable = $derived(me ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
   let atConsole = $derived(me ? atCiConsole(me) : false);
   let target = $derived(
-    session?.players.find(
-      (p) =>
-        p.visible && p.active && p.id !== me?.id && me && Math.hypot(p.x - me.x, p.y - me.y) <= 65
-    )
+    me && session
+      ? nearestWithin(
+          me,
+          session.players.filter((p) => p.visible && p.active && p.id !== me.id),
+          65
+        )
+      : undefined
   );
   let report = $derived(
     session?.phase === 'work' && me?.active

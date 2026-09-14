@@ -19,6 +19,22 @@ export function atCiConsole(position: { x: number; y: number }) {
     Math.abs(position.y - CI_CONSOLE.y) <= CI_CONSOLE.interactionHeight / 2
   );
 }
+export function nearestWithin<T extends { x: number; y: number }>(
+  position: { x: number; y: number },
+  candidates: readonly T[],
+  distance: number
+) {
+  let nearest: T | undefined;
+  let nearestDistance = distance;
+  for (const candidate of candidates) {
+    const candidateDistance = Math.hypot(candidate.x - position.x, candidate.y - position.y);
+    if (candidateDistance <= distance && (!nearest || candidateDistance < nearestDistance)) {
+      nearest = candidate;
+      nearestDistance = candidateDistance;
+    }
+  }
+  return nearest;
+}
 export const STATIONS = [
   {
     id: 'merge',
