@@ -55,7 +55,11 @@
       ? Math.max(
           0,
           Math.ceil(
-            ((session.meeting?.deadline ?? session.meetingResult?.deadline ?? session.deadline) -
+            ((session.phase === 'role-reveal'
+              ? session.roleRevealDeadline
+              : (session.meeting?.deadline ??
+                session.meetingResult?.deadline ??
+                session.deadline)) -
               session.now) /
               1000
           )
@@ -1005,6 +1009,36 @@
     >
   </footer>
 </div>
+
+{#if session?.phase === 'role-reveal' && session.role}
+  <div class="role-reveal-backdrop">
+    <div
+      class:tester={session.role === 'tester'}
+      class:dev={session.role === 'dev'}
+      class="role-reveal-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="role-reveal-title"
+      aria-describedby="role-reveal-message role-reveal-countdown"
+    >
+      <div class="role-reveal-icon" aria-hidden="true">
+        {session.role === 'tester' ? 'QA' : 'DEV'}
+      </div>
+      <div class="eyebrow">YOUR SPRINT ROLE</div>
+      <h2 id="role-reveal-title">
+        You are {session.role === 'tester' ? 'the Tester' : 'a Developer'}
+      </h2>
+      <p id="role-reveal-message">
+        {session.role === 'tester'
+          ? 'Blend in, delay the release, and keep your role secret.'
+          : 'Close every ticket and identify the tester before the deadline.'}
+      </p>
+      <div id="role-reveal-countdown" class="role-reveal-countdown" aria-live="polite">
+        Sprint starts in {seconds}…
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if session?.phase === 'meeting-result' && session.meetingResult}
   <div class="meeting-result-backdrop">

@@ -26,7 +26,7 @@ The production server listens on port 3000. `PORT` overrides it. `/healthz` is a
 
 ## Sprint rules
 
-- The host starts with 3–10 connected people. One randomly assigned tester gets a secret role; everyone else is a dev.
+- The host starts with 3–10 connected people. A three-second role reveal identifies the one randomly assigned tester and every dev before play begins; the role reminder remains above the play area.
 - Devs visit all four office workstations and answer a short task. Every dev's tickets count, including those of people sent on training. Completing every ticket or voting out the tester wins the release.
 - The tester can pretend to work, press B anywhere to break CI (45-second cooldown), and press T to send a nearby colleague on training (30-second cooldown, starting after 25 seconds). Pressing E at the CI Control Console also breaks CI for the tester. An active colleague must press E at that console at the top of the central office to repair CI before tickets can continue. Restarting the server in the Server Cupboard is a separate, regular ticket.
 - Devs lose when the four-minute work clock expires. With 4–10 people, the tester also wins when only one active dev remains. With three, the tester's direct training action is disabled so one click cannot decide the round.

@@ -10,6 +10,9 @@ import {
   type Snapshot
 } from '../src/lib/shared.ts';
 
+const ROLE_REVEAL_DURATION = 3_000;
+const SPRINT_DURATION = 240_000;
+
 type Member = Omit<Person, 'visible'> & {
   token: string;
   socket: string | null;
@@ -27,6 +30,7 @@ export class Session {
   host = '';
   phase: Snapshot['phase'] = 'lobby';
   players: Member[] = [];
+  roleRevealDeadline = 0;
   deadline = 0;
   incident = false;
   sabotageReady = 0;
@@ -111,16 +115,17 @@ export class Session {
       p.notice = null;
       p.tasks = STATIONS.map((s) => s.id);
       p.completed = [];
-      p.cooldown = now + 25_000;
+      p.cooldown = now + ROLE_REVEAL_DURATION + 25_000;
       p.meetings = 1;
-      p.lastMove = now;
+      p.lastMove = now + ROLE_REVEAL_DURATION;
       p.x = 425 + (i % 4) * 45;
       p.y = 280 + Math.floor(i / 4) * 45;
     });
-    this.phase = 'work';
-    this.deadline = now + 240_000;
+    this.phase = 'role-reveal';
+    this.roleRevealDeadline = now + ROLE_REVEAL_DURATION;
+    this.deadline = this.roleRevealDeadline + SPRINT_DURATION;
     this.incident = false;
-    this.sabotageReady = now + 20_000;
+    this.sabotageReady = this.roleRevealDeadline + 20_000;
     this.meeting = null;
     this.meetingResult = null;
     this.result = '';
@@ -128,13 +133,14 @@ export class Session {
   }
   end(winner: Role, result: string) {
     this.phase = 'ended';
+    this.roleRevealDeadline = 0;
     this.winner = winner;
     this.result = result;
     this.meeting = null;
     this.meetingResult = null;
   }
   checkWin() {
-    if (this.phase === 'ended' || this.phase === 'lobby') return;
+    if (this.phase === 'ended' || this.phase === 'lobby' || this.phase === 'role-reveal') return;
     if (!this.players.some((p) => p.active && p.role === 'tester'))
       return this.end('dev', 'The tester has been sent on mandatory training. Release approved!');
     const devs = this.players.filter((p) => p.role === 'dev');
@@ -161,6 +167,7 @@ export class Session {
       if (action.type === 'reset' && this.phase === 'ended') {
         this.players = this.players.filter((p) => p.connected);
         this.phase = 'lobby';
+        this.roleRevealDeadline = 0;
         this.players.forEach((p) => {
           p.active = true;
           p.reported = false;
@@ -320,6 +327,12 @@ export class Session {
     this.phase = 'work';
     this.checkWin();
   }
+  finishRoleReveal(now: number) {
+    if (this.phase !== 'role-reveal') return;
+    this.phase = 'work';
+    this.roleRevealDeadline = 0;
+    this.players.forEach((p) => (p.lastMove = now));
+  }
   tick(now = Date.now()) {
     for (const p of [...this.players]) {
       if (!p.connected && now - p.disconnectedAt > 60_000) {
@@ -336,11 +349,9 @@ export class Session {
     }
     if (this.phase === 'meeting' && this.meeting && now >= this.meeting.deadline)
       this.resolveMeeting(now);
-    if (
-      this.phase === 'meeting-result' &&
-      this.meetingResult &&
-      now >= this.meetingResult.deadline
-    )
+    if (this.phase === 'role-reveal' && this.roleRevealDeadline && now >= this.roleRevealDeadline)
+      this.finishRoleReveal(now);
+    if (this.phase === 'meeting-result' && this.meetingResult && now >= this.meetingResult.deadline)
       this.finishMeetingResult(now);
     if (this.phase === 'work' && now >= this.deadline)
       this.end(
@@ -378,6 +389,7 @@ export class Session {
       completed: me.completed,
       progress: devs.reduce((n, p) => n + p.completed.length, 0),
       total: devs.reduce((n, p) => n + p.tasks.length, 0),
+      roleRevealDeadline: this.roleRevealDeadline,
       deadline: this.deadline,
       now,
       cooldown: me.cooldown,

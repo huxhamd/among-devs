@@ -22,6 +22,10 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     await pages[0].getByRole('button', { name: 'Start sprint' }).click();
     for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
 
+    const roleReveals = pages.map((page) => page.locator('.role-reveal-card'));
+    await Promise.all(roleReveals.map((reveal) => expect(reveal).toBeVisible()));
+    await Promise.all(roleReveals.map((reveal) => expect(reveal).toBeHidden({ timeout: 5000 })));
+
     const roles = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
     const testerIndex = roles.findIndex((role) => role.includes('THE TESTER'));
     expect(testerIndex).toBeGreaterThanOrEqual(0);
@@ -87,6 +91,19 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     }
     await pages[0].getByRole('button', { name: 'Start sprint' }).click();
     for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
+    const roleReveals = pages.map((page) => page.locator('.role-reveal-card'));
+    await Promise.all(roleReveals.map((reveal) => expect(reveal).toBeVisible()));
+    const revealTitles = await Promise.all(
+      roleReveals.map((reveal) => reveal.locator('h2').innerText())
+    );
+    expect(revealTitles.filter((title) => title === 'You are the Tester')).toHaveLength(1);
+    const revealedTesterIndex = revealTitles.indexOf('You are the Tester');
+    await expect(roleReveals[revealedTesterIndex]).toHaveClass(/tester/);
+    await expect(pages[revealedTesterIndex].locator('.role-tag')).toHaveCSS(
+      'color',
+      'rgb(186, 230, 253)'
+    );
+    await Promise.all(roleReveals.map((reveal) => expect(reveal).toBeHidden({ timeout: 5000 })));
     await pages[0].screenshot({ path: 'test-results/office.png', fullPage: true });
     const tester = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
     const testerIndex = tester.findIndex((role) => role.includes('THE TESTER'));

@@ -70,7 +70,7 @@ export const WALLS = [
   { x: 0, y: 302, w: 315, h: 16 },
   { x: 685, y: 302, w: 315, h: 16 }
 ];
-export type Phase = 'lobby' | 'work' | 'meeting' | 'meeting-result' | 'ended';
+export type Phase = 'lobby' | 'role-reveal' | 'work' | 'meeting' | 'meeting-result' | 'ended';
 export type Role = 'dev' | 'tester';
 export type Person = {
   id: string;
@@ -94,6 +94,7 @@ export type Snapshot = {
   completed: string[];
   progress: number;
   total: number;
+  roleRevealDeadline: number;
   deadline: number;
   now: number;
   cooldown: number;

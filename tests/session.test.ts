@@ -7,6 +7,7 @@ function setup(count = 4) {
   const room = new Session('ABC234');
   for (let i = 0; i < count; i++) room.join(`Person ${i}`, `socket-${i}`, undefined, 1000);
   room.action(room.host, { type: 'start' }, 1000);
+  room.tick(4000);
   return room;
 }
 test('lobbies enforce minimum, maximum, unique names and host control', () => {
@@ -21,7 +22,7 @@ test('lobbies enforce minimum, maximum, unique names and host control', () => {
 test('exactly one tester; snapshots do not disclose credentials or other roles', () => {
   const room = setup(10);
   assert.equal(room.players.filter((p) => p.role === 'tester').length, 1);
-  const snapshot = room.snapshot(room.host, 1000);
+  const snapshot = room.snapshot(room.host, 4000);
   for (const person of snapshot.players) {
     assert.equal('role' in person, false);
     assert.equal('token' in person, false);
@@ -29,16 +30,30 @@ test('exactly one tester; snapshots do not disclose credentials or other roles',
   }
   assert.equal(snapshot.total, 36);
 });
+test('starting a sprint reveals roles for three seconds before work begins', () => {
+  const room = new Session('ABC234');
+  for (let i = 0; i < 4; i++) room.join(`Person ${i}`, `socket-${i}`, undefined, 1000);
+  room.action(room.host, { type: 'start' }, 1000);
+  assert.equal(room.phase, 'role-reveal');
+  assert.equal(room.snapshot(room.host, 1000).roleRevealDeadline, 4000);
+  assert.ok(room.snapshot(room.host, 1000).role);
+  assert.throws(() => room.action(room.host, { type: 'move', dx: 1, dy: 0 }, 3999), /resumes/);
+  room.tick(3999);
+  assert.equal(room.phase, 'role-reveal');
+  room.tick(4000);
+  assert.equal(room.phase, 'work');
+  assert.equal(room.deadline, 244000);
+});
 test('movement is bounded by elapsed time and walls', () => {
   const room = setup();
   const person = room.players[0];
   person.x = 290;
   person.y = 100;
-  room.action(person.id, { type: 'move', dx: 999999, dy: 0 }, 1100);
+  room.action(person.id, { type: 'move', dx: 999999, dy: 0 }, 4100);
   assert.equal(person.x, 290);
-  room.action(person.id, { type: 'move', dx: 0, dy: 999999 }, 1200);
+  room.action(person.id, { type: 'move', dx: 0, dy: 999999 }, 4200);
   assert.equal(person.y, 119);
-  room.action(person.id, { type: 'move', dx: NaN, dy: 0 }, 1300);
+  room.action(person.id, { type: 'move', dx: NaN, dy: 0 }, 4300);
   assert.equal(person.x, 290);
 });
 test('task proximity, answers, deduplication, sabotage and dev victory', () => {
@@ -180,7 +195,7 @@ test('three-person rounds cannot end on the first training action', () => {
       ),
     /three/
   );
-  room.tick(241000);
+  room.tick(244000);
   assert.equal(room.winner, 'tester');
 });
 test('training requires the tester and cooldown; trainees can still work', () => {
@@ -194,7 +209,7 @@ test('training requires the tester and cooldown; trainees can still work', () =>
     /unavailable/
   );
   assert.throws(
-    () => room.action(tester.id, { type: 'sideline', target: dev.id }, 2000),
+    () => room.action(tester.id, { type: 'sideline', target: dev.id }, 5000),
     /unavailable/
   );
   room.action(tester.id, { type: 'sideline', target: dev.id }, 30000);
