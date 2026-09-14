@@ -2,7 +2,15 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
-  import { CI_CONSOLE, STATIONS, WALLS, type Snapshot, type Action, type Reply } from '$lib/shared';
+  import {
+    CI_CONSOLE,
+    STATIONS,
+    WALLS,
+    atCiConsole,
+    type Snapshot,
+    type Action,
+    type Reply
+  } from '$lib/shared';
   import '../style.css';
 
   let socket: Socket;
@@ -35,7 +43,7 @@
     me ? STATIONS.find((s) => Math.hypot(s.x - me.x, s.y - me.y) <= 80) : undefined
   );
   let atTable = $derived(me ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
-  let atConsole = $derived(me ? Math.hypot(me.x - CI_CONSOLE.x, me.y - CI_CONSOLE.y) <= 80 : false);
+  let atConsole = $derived(me ? atCiConsole(me) : false);
   let target = $derived(
     session?.players.find(
       (p) =>
@@ -716,9 +724,9 @@
                 ><text class="room-label" x="500" y="105">THE OPEN PLAN</text>
                 <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
                   <rect
-                    x="-100"
+                    x={-CI_CONSOLE.width / 2}
                     y="-36"
-                    width="200"
+                    width={CI_CONSOLE.width}
                     height="68"
                     rx="5"
                     fill="#394351"

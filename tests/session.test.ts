@@ -82,6 +82,15 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   dev.y = CI_CONSOLE.y + 60;
   room.action(dev.id, { type: 'repair' }, 30000);
   assert.equal(room.incident, false);
+
+  for (const [index, edge] of [-1, 1].entries()) {
+    const now = 80000 + index * 50000;
+    room.action(tester.id, { type: 'sabotage' }, now);
+    dev.x = CI_CONSOLE.x + edge * (CI_CONSOLE.width / 2);
+    dev.y = CI_CONSOLE.y + 60;
+    room.action(dev.id, { type: 'repair' }, now);
+    assert.equal(room.incident, false);
+  }
   tester.x = 160;
   tester.y = 130;
   room.action(tester.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);

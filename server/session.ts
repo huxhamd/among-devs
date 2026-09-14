@@ -1,8 +1,8 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import {
   COLORS,
-  CI_CONSOLE,
   STATIONS,
+  atCiConsole,
   walkable,
   type Action,
   type Person,
@@ -251,7 +251,7 @@ export class Session {
     }
     if (action.type === 'repair') {
       if (!this.incident) throw new Error('CI is already operational.');
-      if (!this.nearby(p, CI_CONSOLE))
+      if (!atCiConsole(p))
         throw new Error(
           'Move to the CI Control Console at the top of the central office to repair CI.'
         );

@@ -12,7 +12,13 @@ export const COLORS = [
 ];
 export const WIDTH = 1000;
 export const HEIGHT = 620;
-export const CI_CONSOLE = { x: 500, y: 45 } as const;
+export const CI_CONSOLE = { x: 500, y: 45, width: 200, interactionHeight: 160 } as const;
+export function atCiConsole(position: { x: number; y: number }) {
+  return (
+    Math.abs(position.x - CI_CONSOLE.x) <= CI_CONSOLE.width / 2 &&
+    Math.abs(position.y - CI_CONSOLE.y) <= CI_CONSOLE.interactionHeight / 2
+  );
+}
 export const STATIONS = [
   {
     id: 'merge',
