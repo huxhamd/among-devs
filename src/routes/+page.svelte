@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { CI_CONSOLE, STATIONS, WALLS, type Snapshot, type Action, type Reply } from '$lib/shared';
   import '../style.css';
@@ -732,7 +733,8 @@
                       font-size="12">{item.name}</text
                     ></g
                   >{/each}
-                {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person}<g
+                {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}<g
+                    transition:fade={{ duration: 250 }}
                     style:opacity={!person.connected ? 0.35 : person.active ? 1 : 0.5}
                     transform={`translate(${person.x},${person.y})`}
                     ><ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
