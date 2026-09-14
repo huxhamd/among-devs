@@ -1,7 +1,7 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
   import { io, type Socket } from 'socket.io-client';
-  import { STATIONS, WALLS, type Snapshot, type Action, type Reply } from '$lib/shared';
+  import { CI_CONSOLE, STATIONS, WALLS, type Snapshot, type Action, type Reply } from '$lib/shared';
   import '../style.css';
 
   let socket: Socket;
@@ -25,6 +25,7 @@
     me ? STATIONS.find((s) => Math.hypot(s.x - me.x, s.y - me.y) <= 80) : undefined
   );
   let atTable = $derived(me ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
+  let atConsole = $derived(me ? Math.hypot(me.x - CI_CONSOLE.x, me.y - CI_CONSOLE.y) <= 80 : false);
   let target = $derived(
     session?.players.find(
       (p) =>
@@ -88,10 +89,17 @@
       else if (action.type === 'task') {
         stationId = '';
         notice = 'Ticket closed. Please resist adding scope.';
+      } else if (action.type === 'repair') {
+        notice = 'CI restored. Tickets are available again.';
       }
     });
   }
   function openTask() {
+    if (session?.incident) {
+      notice =
+        'CI is down. Go to the CI Control Console at the top of the central office and press E to repair CI.';
+      return;
+    }
     if (nearby) {
       stationId = nearby.id;
       taskStarted = Date.now();
@@ -196,7 +204,20 @@
         stationId = '';
         help = false;
       }
-      if (key === 'e' && session?.phase === 'work' && !stationId && !help) openTask();
+      if (
+        key === 'e' &&
+        !event.repeat &&
+        connected &&
+        session?.phase === 'work' &&
+        !stationId &&
+        !help
+      ) {
+        if (atConsole) {
+          if (session.incident && me?.active) act({ type: 'repair' });
+          else
+            notice = session.incident ? 'An active colleague must repair CI.' : 'CI operational.';
+        } else openTask();
+      }
     };
     const up = (event: KeyboardEvent) => keys.delete(event.key.toLowerCase());
     const clear = () => keys.clear();
@@ -444,8 +465,8 @@
           </div>
         </div>
         {#if session.incident}<div class="banner danger">
-            CI is down. Tickets are blocked until an active colleague repairs the pipeline in the
-            server cupboard.
+            CI is down. Go to the CI Control Console at the top of the central office and press E to
+            repair CI. An active colleague must restore CI before tickets can continue.
           </div>{/if}
         {#if session.result}<div class="banner">{session.result}</div>{/if}
         {#if session.phase === 'meeting'}
@@ -490,7 +511,7 @@
               <svg
                 viewBox="0 0 1000 620"
                 role="img"
-                aria-label="Office map. Move using WASD or arrow keys, and press E at a workstation."
+                aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, or at the top-centre CI Control Console to repair CI."
               >
                 <defs
                   ><pattern id="floor" width="40" height="40" patternUnits="userSpaceOnUse"
@@ -552,6 +573,51 @@
                   x="840"
                   y="580">PRODUCT CORNER</text
                 ><text class="room-label" x="500" y="105">THE OPEN PLAN</text>
+                <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
+                  <rect
+                    x="-100"
+                    y="-36"
+                    width="200"
+                    height="68"
+                    rx="5"
+                    fill="#394351"
+                    stroke={atConsole ? '#c3b6ff' : '#83909e'}
+                    stroke-width="3"
+                  />
+                  <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
+                  <text y="-12" text-anchor="middle" fill="#e7eeff" font-size="12"
+                    >CI CONTROL CONSOLE</text
+                  >
+                  <path
+                    d={session.incident ? 'M-55 4H-12M12 4H55M-5 -1L5 9M5 -1L-5 9' : 'M-55 4H55'}
+                    fill="none"
+                    stroke={session.incident ? '#fda4af' : '#5eead4'}
+                    stroke-width="3"
+                  />
+                  <circle cx="-55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
+                  <circle cx="55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
+                  <text
+                    y="20"
+                    text-anchor="middle"
+                    fill={session.incident ? '#fda4af' : '#5eead4'}
+                    font-size="11"
+                    >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
+                  >
+                  {#if atConsole && session.incident && me?.active}
+                    <rect
+                      x="-85"
+                      y="76"
+                      width="170"
+                      height="27"
+                      rx="5"
+                      fill="#17212b"
+                      stroke="#c3b6ff"
+                    />
+                    <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
+                      >E — Repair CI</text
+                    >
+                  {/if}
+                </g>
                 <rect
                   x="442"
                   y="270"
@@ -663,9 +729,6 @@
                     >{session.completed.includes(nearby.id)
                       ? 'Ticket already closed ✓'
                       : 'Open ticket · E'}</button
-                  >{/if}{#if nearby?.id === 'build' && session.incident && me?.active}<button
-                    class="primary wide"
-                    onclick={() => act({ type: 'repair' })}>Repair CI</button
                   >{/if}{#if atTable && me?.active}<button
                     class="secondary wide"
                     disabled={!session.meetingsLeft || session.incident}
@@ -739,7 +802,7 @@
       </div>
       <small class="muted"
         >{session.incident
-          ? 'CI is down. Close this ticket and repair the pipeline.'
+          ? 'CI is down. Press Esc, then go to the CI Control Console at the top of the central office and press E to repair CI.'
           : taskTime < 3000
             ? 'Reviewing the requirements…'
             : 'Select an answer to close the ticket.'}</small
@@ -773,8 +836,9 @@
       </p>
       <p>
         The tester can break CI every 45 seconds and send a nearby colleague on training every 30
-        seconds. Repair CI at the server cupboard. With three people, the tester’s training action
-        is disabled.
+        seconds. To repair CI, go to the CI Control Console at the top of the central office and
+        press <b>E</b>. The Server Cupboard’s restart task is a separate ticket. With three people,
+        the tester’s training action is disabled.
       </p>
       <p>
         Call one standup per person at the central table, or report a nearby training notice.

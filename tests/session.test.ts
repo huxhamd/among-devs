@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session } from '../server/session.ts';
-import { STATIONS } from '../src/lib/shared.ts';
+import { CI_CONSOLE, STATIONS } from '../src/lib/shared.ts';
 
 function setup(count = 4) {
   const room = new Session('ABC234');
@@ -61,7 +61,12 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
     /Repair/
   );
   dev.x = 840;
+  assert.throws(() => room.action(dev.id, { type: 'repair' }, 30000), /CI Control Console/);
+  assert.equal(room.incident, true);
+  dev.x = CI_CONSOLE.x;
+  dev.y = CI_CONSOLE.y + 60;
   room.action(dev.id, { type: 'repair' }, 30000);
+  assert.equal(room.incident, false);
   tester.x = 160;
   tester.y = 130;
   room.action(tester.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);

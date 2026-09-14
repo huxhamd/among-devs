@@ -12,6 +12,7 @@ export const COLORS = [
 ];
 export const WIDTH = 1000;
 export const HEIGHT = 620;
+export const CI_CONSOLE = { x: 500, y: 45 } as const;
 export const STATIONS = [
   {
     id: 'merge',
@@ -26,14 +27,14 @@ export const STATIONS = [
   },
   {
     id: 'build',
-    name: 'Restart the pipeline',
+    name: 'Restart the server',
     room: 'Server cupboard',
     x: 840,
     y: 130,
     symbol: '▥',
-    answer: 'retry',
-    prompt: 'CI failed because Mercury is in retrograde. Try…',
-    options: ['retry', 'panic', 'blame DNS']
+    answer: 'restart',
+    prompt: 'The office server has stopped responding. Try…',
+    options: ['restart', 'panic', 'blame DNS']
   },
   {
     id: 'coffee',

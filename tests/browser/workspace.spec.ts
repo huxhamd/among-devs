@@ -28,6 +28,23 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const tester = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
     const testerIndex = tester.findIndex((role) => role.includes('THE TESTER'));
     expect(testerIndex).toBeGreaterThanOrEqual(0);
+    const repairPage = pages.find((_, index) => index !== 0 && index !== testerIndex)!;
+    await expect(repairPage.getByText('CI operational', { exact: true })).toBeVisible();
+    await expect(repairPage.getByText('Restart the server', { exact: true }).first()).toBeVisible();
+    await pages[testerIndex].getByRole('button', { name: /^Break CI/ }).click();
+    await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
+    await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
+    await repairPage.keyboard.down('w');
+    try {
+      await expect(repairPage.getByText('E — Repair CI', { exact: true })).toBeVisible();
+    } finally {
+      await repairPage.keyboard.up('w');
+    }
+    await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
+    await repairPage.keyboard.press('e');
+    for (const page of pages)
+      await expect(page.getByText('CI operational', { exact: true })).toBeVisible();
+    await expect(repairPage.getByText('CI restored. Tickets are available again.')).toBeVisible();
     await pages[2].reload();
     await expect(pages[2].getByText('Operation: ship it.')).toBeVisible();
     await expect(pages[2].locator('.role-tag')).toHaveText(tester[2]);

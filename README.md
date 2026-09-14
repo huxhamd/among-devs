@@ -28,9 +28,9 @@ The production server listens on port 3000. `PORT` overrides it. `/healthz` is a
 
 - The host starts with 3–10 connected people. One randomly assigned tester gets a secret role; everyone else is a dev.
 - Devs visit all four office workstations and answer a short task. Every dev's tickets count, including those of people sent on training. Completing every ticket or voting out the tester wins the release.
-- The tester can pretend to work, break CI (45-second cooldown), and send a nearby colleague on training (30-second cooldown, starting after 25 seconds). An active colleague must repair CI in the server cupboard before tickets can continue.
+- The tester can pretend to work, break CI (45-second cooldown), and send a nearby colleague on training (30-second cooldown, starting after 25 seconds). An active colleague must press E at the CI Control Console at the top of the central office to repair CI before tickets can continue. Restarting the server in the Server Cupboard is a separate, regular ticket.
 - Devs lose when the four-minute work clock expires. With 4–10 people, the tester also wins when only one active dev remains. With three, the tester's direct training action is disabled so one click cannot decide the round.
-- WASD or arrow keys move. E opens a nearby task. Doorways connect rooms through the central office.
+- WASD or arrow keys move. E opens a nearby task or repairs broken CI at the CI Control Console. Doorways connect rooms through the central office.
 - During work, active colleagues see only nearby people with an unobstructed line of sight. Hidden positions are withheld by the server. Training notices stay where they were issued while trainees move privately.
 - Each person can call one standup at the central table, when CI is healthy. Finding a training notice also allows a standup. Discuss in Teams and vote in the browser within 40 seconds. Votes are final and anonymous to other clients; submission status is visible. Ties, skips and abstentions can keep everyone in. Roles are revealed only at the end.
 - Work time and action cooldowns pause during meetings. Usually allow 4–6 minutes per round; many standups can extend a round. All attendees can observe meetings; training attendees cannot vote and should stay quiet on Teams.

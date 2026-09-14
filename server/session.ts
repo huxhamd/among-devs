@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import {
   COLORS,
+  CI_CONSOLE,
   STATIONS,
   walkable,
   type Action,
@@ -193,7 +194,10 @@ export class Session {
     if (action.type === 'task') {
       const station = STATIONS.find((s) => s.id === action.station);
       if (!station || !this.nearby(p, station)) throw new Error('Move closer to that workstation.');
-      if (this.incident) throw new Error('Repair CI in the server cupboard first.');
+      if (this.incident)
+        throw new Error(
+          'Repair CI at the CI Control Console at the top of the central office first.'
+        );
       if (station.answer !== action.answer)
         throw new Error('That might need another refinement session. Try again.');
       // Testers can convincingly pretend to work, but never advance team progress.
@@ -229,8 +233,11 @@ export class Session {
       return;
     }
     if (action.type === 'repair') {
-      if (!this.incident || !this.nearby(p, STATIONS[1]))
-        throw new Error('Move to the server cupboard to repair CI.');
+      if (!this.incident) throw new Error('CI is already operational.');
+      if (!this.nearby(p, CI_CONSOLE))
+        throw new Error(
+          'Move to the CI Control Console at the top of the central office to repair CI.'
+        );
       this.incident = false;
       return;
     }
