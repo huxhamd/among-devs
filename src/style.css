@@ -643,6 +643,76 @@ footer > span:first-child {
   letter-spacing: 1px;
   margin-left: 5px;
 }
+.ci-banner {
+  display: grid;
+  margin-bottom: 15px;
+  overflow: hidden;
+  background: #24382f;
+  border: 1px solid #436654;
+  border-radius: 9px;
+  color: #bde8ce;
+  box-shadow: inset 4px 0 #79bf98;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
+}
+.ci-banner.offline {
+  background: #4a2e36;
+  border-color: #9b5261;
+  color: #ffd4da;
+  box-shadow:
+    inset 4px 0 #f0808f,
+    0 0 24px #a13d4f20;
+}
+.ci-banner-message {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 11px 16px;
+  opacity: 0;
+  visibility: hidden;
+}
+.ci-banner-message.active {
+  opacity: 1;
+  visibility: visible;
+}
+.ci-banner-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: #79bf98;
+  border-radius: 50%;
+  color: #24382f;
+  font-size: 13px;
+  font-weight: 800;
+}
+.ci-banner.offline .ci-banner-icon {
+  background: #f0808f;
+  color: #4a2e36;
+}
+.ci-banner-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ci-banner-copy strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+.ci-banner-copy span {
+  color: #a9c8b5;
+}
+.ci-banner.offline .ci-banner-copy span {
+  color: #f1bcc4;
+}
 .play-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

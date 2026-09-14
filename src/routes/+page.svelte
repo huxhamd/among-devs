@@ -519,10 +519,33 @@
             <small>{session.phase === 'meeting' ? 'TO VOTE' : 'TO DEADLINE'}</small>
           </div>
         </div>
-        {#if session.incident}<div class="banner danger">
-            CI is down. Go to the CI Control Console at the top of the central office and press E to
-            repair CI. An active colleague must restore CI before tickets can continue.
-          </div>{/if}
+        <div class:offline={session.incident} class="ci-banner">
+          <div
+            class:active={!session.incident}
+            class="ci-banner-message online"
+            role="status"
+            aria-hidden={session.incident}
+          >
+            <span class="ci-banner-icon" aria-hidden="true">✓</span>
+            <div class="ci-banner-copy">
+              <strong>CI operational</strong><span>Tickets can proceed.</span>
+            </div>
+          </div>
+          <div
+            class:active={session.incident}
+            class="ci-banner-message outage"
+            role="alert"
+            aria-hidden={!session.incident}
+          >
+            <span class="ci-banner-icon" aria-hidden="true">!</span>
+            <div class="ci-banner-copy">
+              <strong>CI is down</strong><span
+                >Go to the CI Control Console at the top of the central office and press E to repair
+                CI. An active colleague must restore CI before tickets can continue.</span
+              >
+            </div>
+          </div>
+        </div>
         {#if session.result}<div class="banner">{session.result}</div>{/if}
         {#if session.phase === 'meeting'}
           <section class="panel meeting">

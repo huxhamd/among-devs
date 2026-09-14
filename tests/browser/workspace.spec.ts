@@ -29,10 +29,35 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const testerIndex = tester.findIndex((role) => role.includes('THE TESTER'));
     expect(testerIndex).toBeGreaterThanOrEqual(0);
     const repairPage = pages.find((_, index) => index !== 0 && index !== testerIndex)!;
-    await expect(repairPage.getByText('CI operational', { exact: true })).toBeVisible();
+    await expect(
+      repairPage.locator('.map-panel').getByText('CI operational', { exact: true })
+    ).toBeVisible();
     await expect(repairPage.getByText('Restart the server', { exact: true }).first()).toBeVisible();
+    const ciBanner = repairPage.locator('.ci-banner');
+    await expect(ciBanner.locator('.online')).toBeVisible();
+    await expect(ciBanner.locator('.outage')).toBeHidden();
+    const mapTopBeforeIncident = await repairPage
+      .locator('.map-panel')
+      .evaluate((element) => element.getBoundingClientRect().top);
+    const bannerHeightBeforeIncident = await ciBanner.evaluate(
+      (element) => element.getBoundingClientRect().height
+    );
     await pages[testerIndex].getByRole('button', { name: /^Break CI/ }).click();
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
+    await expect(ciBanner).toHaveClass(/offline/);
+    await expect(ciBanner.locator('.online')).toBeHidden();
+    await expect(ciBanner.locator('.outage')).toContainText(
+      'An active colleague must restore CI before tickets can continue.'
+    );
+    await expect(ciBanner.locator('.outage')).toBeVisible();
+    const mapTopDuringIncident = await repairPage
+      .locator('.map-panel')
+      .evaluate((element) => element.getBoundingClientRect().top);
+    const bannerHeightDuringIncident = await ciBanner.evaluate(
+      (element) => element.getBoundingClientRect().height
+    );
+    expect(Math.abs(mapTopDuringIncident - mapTopBeforeIncident)).toBeLessThan(1);
+    expect(Math.abs(bannerHeightDuringIncident - bannerHeightBeforeIncident)).toBeLessThan(1);
     await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
     await repairPage.keyboard.down('w');
     try {
@@ -43,8 +68,17 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
     for (const page of pages)
-      await expect(page.getByText('CI operational', { exact: true })).toBeVisible();
-    const repairToast = repairPage.getByRole('status');
+      await expect(
+        page.locator('.map-panel').getByText('CI operational', { exact: true })
+      ).toBeVisible();
+    await expect(ciBanner).not.toHaveClass(/offline/);
+    await expect(ciBanner.locator('.online')).toBeVisible();
+    await expect(ciBanner.locator('.outage')).toBeHidden();
+    const mapTopAfterIncident = await repairPage
+      .locator('.map-panel')
+      .evaluate((element) => element.getBoundingClientRect().top);
+    expect(Math.abs(mapTopAfterIncident - mapTopBeforeIncident)).toBeLessThan(1);
+    const repairToast = repairPage.locator('.toast[role="status"]');
     await expect(repairToast).toContainText('CI restored. Tickets are available again.');
     await expect(repairToast.locator('.toast-progress')).toBeVisible();
     await repairToast.hover();
