@@ -890,6 +890,80 @@ kbd {
 .vote-card strong {
   font-size: 13px;
 }
+.meeting-result-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 25px;
+  background: #080b12df;
+  backdrop-filter: blur(8px);
+}
+.meeting-result-card {
+  width: min(100%, 560px);
+  padding: 48px 40px 40px;
+  text-align: center;
+  background: #241f28;
+  border: 1px solid #744754;
+  border-radius: 20px;
+  box-shadow: 0 24px 100px #0009;
+  animation: meeting-result-arrive 0.28s ease-out both;
+}
+.meeting-result-card.success {
+  background: #1d2925;
+  border-color: #477863;
+}
+.meeting-result-card .eyebrow {
+  justify-content: center;
+}
+.meeting-result-icon {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  margin: 0 auto 28px;
+  color: #fecdd3;
+  background: #fb71851c;
+  border: 3px solid #fb7185;
+  border-radius: 50%;
+  font-size: 76px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 0 45px #fb71852e;
+}
+.meeting-result-card.success .meeting-result-icon {
+  color: #bbf7d0;
+  background: #4ade8017;
+  border-color: #4ade80;
+  box-shadow: 0 0 45px #4ade8029;
+}
+.meeting-result-card h2 {
+  margin: 13px 0 10px;
+  font-size: clamp(30px, 5vw, 42px);
+  letter-spacing: -1.5px;
+}
+.meeting-result-card p {
+  color: #bac3d0;
+  font-size: 14px;
+}
+.meeting-result-countdown {
+  margin-top: 30px;
+  color: #fda4af;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.meeting-result-card.success .meeting-result-countdown {
+  color: #86efac;
+}
+@keyframes meeting-result-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+}
 .toast {
   position: fixed;
   bottom: 25px;
@@ -1131,5 +1205,8 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .toast-progress {
     display: none;
+  }
+  .meeting-result-card {
+    animation: none;
   }
 }

@@ -33,7 +33,7 @@ The production server listens on port 3000. `PORT` overrides it. `/healthz` is a
 - WASD or arrow keys move. E opens a nearby task or repairs broken CI at the CI Control Console. Doorways connect rooms through the central office.
 - During work, active colleagues see only nearby people with an unobstructed line of sight. Hidden positions are withheld by the server. Training notices stay where they were issued while trainees move privately.
 - Each person can call one standup at the central table, when CI is healthy. Finding a training notice also allows a standup. Discuss in Teams and vote in the browser within 40 seconds. Votes are final and anonymous to other clients; submission status is visible. Ties, skips and abstentions can keep everyone in. Roles are revealed only at the end.
-- Work time and action cooldowns pause during meetings. Usually allow 4–6 minutes per round; many standups can extend a round. All attendees can observe meetings; training attendees cannot vote and should stay quiet on Teams.
+- Work time and action cooldowns pause during meetings and the three-second result countdown. Usually allow 4–6 minutes per round; many standups can extend a round. All attendees can observe meetings; training attendees cannot vote and should stay quiet on Teams.
 - Refreshing reconnects to the same seat within 60 seconds. A disconnected host transfers control to a connected colleague. If someone fails to reconnect during a round, the round is cancelled rather than leaving an unwinnable set of tasks. The host can return everyone to the lobby and start again.
 
 ## Container

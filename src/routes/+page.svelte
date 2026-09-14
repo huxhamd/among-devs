@@ -51,7 +51,11 @@
     session
       ? Math.max(
           0,
-          Math.ceil(((session.meeting?.deadline ?? session.deadline) - session.now) / 1000)
+          Math.ceil(
+            ((session.meeting?.deadline ?? session.meetingResult?.deadline ?? session.deadline) -
+              session.now) /
+              1000
+          )
         )
       : 0
   );
@@ -153,6 +157,10 @@
       return;
     }
     if (nearby) {
+      if (session?.completed.includes(nearby.id)) {
+        showNotice('Ticket already closed.');
+        return;
+      }
       stationId = nearby.id;
       taskStarted = Date.now();
       taskTime = 0;
@@ -266,11 +274,17 @@
       ) {
         if (atConsole) {
           if (session.incident && me?.active) act({ type: 'repair' });
-          else
-            showNotice(
-              session.incident ? 'An active colleague must repair CI.' : 'CI operational.',
-              session.incident ? GUIDANCE_DURATION : NOTICE_DURATION
-            );
+          else if (session.incident)
+            showNotice('An active colleague must repair CI.', GUIDANCE_DURATION);
+          else if (session.role === 'tester' && me?.active) {
+            if (sabotageCooldown) showNotice(`Break CI will be ready in ${sabotageCooldown}s.`);
+            else act({ type: 'sabotage' });
+          } else showNotice('CI operational.');
+        } else if (atTable && me?.active) {
+          if (!session.meetingsLeft) showNotice('You have no standups remaining.');
+          else if (session.incident)
+            showNotice('CI is down. Repair CI before calling a standup.', GUIDANCE_DURATION);
+          else act({ type: 'meeting' });
         } else openTask();
       }
     };
@@ -410,7 +424,7 @@
               ? 'The team is assembling.'
               : session.phase === 'ended'
                 ? 'That’s a wrap.'
-                : session.phase === 'meeting'
+                : session.phase === 'meeting' || session.phase === 'meeting-result'
                   ? 'Let’s take this offline.'
                   : 'Operation: ship it.'}
           </h1>
@@ -517,7 +531,15 @@
           </div>
           <div class="timer">
             {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-            <small>{session.phase === 'meeting' ? 'TO VOTE' : 'TO DEADLINE'}</small>
+            <small
+              >{session.phase === 'meeting'
+                ? 'TO VOTE'
+                : session.phase === 'meeting-result'
+                  ? session.meetingResult?.continues
+                    ? 'TO RESUME'
+                    : 'TO FINISH'
+                  : 'TO DEADLINE'}</small
+            >
           </div>
         </div>
         <div class:offline={session.incident} class="ci-banner">
@@ -590,7 +612,7 @@
               <svg
                 viewBox="0 0 1000 620"
                 role="img"
-                aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, or at the top-centre CI Control Console to repair CI."
+                aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, at the central table to call a standup, or at the top-centre CI Control Console to repair or break CI."
               >
                 <defs
                   ><pattern id="floor" width="40" height="40" patternUnits="userSpaceOnUse"
@@ -682,18 +704,32 @@
                     font-size="11"
                     >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
                   >
-                  {#if atConsole && session.incident && me?.active}
+                  {#if atConsole}
                     <rect
-                      x="-85"
+                      x="-105"
                       y="76"
-                      width="170"
+                      width="210"
                       height="27"
                       rx="5"
                       fill="#17212b"
-                      stroke="#c3b6ff"
+                      stroke={session.incident
+                        ? me?.active
+                          ? '#c3b6ff'
+                          : '#83909e'
+                        : session.role === 'tester' && me?.active && !sabotageCooldown
+                          ? '#fda4af'
+                          : '#5eead4'}
                     />
                     <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
-                      >E — Repair CI</text
+                      >{session.incident
+                        ? me?.active
+                          ? 'E — Repair CI'
+                          : 'Active colleague required'
+                        : session.role === 'tester' && me?.active
+                          ? sabotageCooldown
+                            ? `Break CI ready in ${sabotageCooldown}s`
+                            : 'E — Break CI'
+                          : 'CI operational ✓'}</text
                     >
                   {/if}
                 </g>
@@ -709,6 +745,24 @@
                 /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
                   >STANDUP</text
                 >
+                {#if atTable && me?.active}
+                  <rect
+                    x="395"
+                    y="364"
+                    width="210"
+                    height="27"
+                    rx="5"
+                    fill="#17212b"
+                    stroke="#c3b6ff"
+                  />
+                  <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
+                    >{!session.meetingsLeft
+                      ? 'No standups remaining'
+                      : session.incident
+                        ? 'CI down — standup blocked'
+                        : 'E — Call standup'}</text
+                  >
+                {/if}
                 {#each STATIONS as item}<g
                     ><rect
                       x={item.x - 55}
@@ -731,7 +785,26 @@
                       text-anchor="middle"
                       fill="#b9c2d1"
                       font-size="12">{item.name}</text
-                    ></g
+                    >{#if nearby?.id === item.id}<rect
+                        x={item.x - 95}
+                        y={item.y + 68}
+                        width="190"
+                        height="27"
+                        rx="5"
+                        fill="#17212b"
+                        stroke="#c3b6ff"
+                      /><text
+                        x={item.x}
+                        y={item.y + 86}
+                        text-anchor="middle"
+                        fill="#ffffff"
+                        font-size="14"
+                        >{session.completed.includes(item.id)
+                          ? 'Ticket already closed ✓'
+                          : session.incident
+                            ? 'CI down — ticket blocked'
+                            : 'E — Open ticket'}</text
+                      >{/if}</g
                   >{/each}
                 {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}<g
                     transition:fade={{ duration: 250 }}
@@ -802,7 +875,12 @@
                   </div>{/each}
               </div>
               <div class="context-actions">
-                {#if nearby}<button
+                {#if atConsole && session.incident}<button
+                    class="primary wide"
+                    disabled={!me?.active}
+                    onclick={() => act({ type: 'repair' })}
+                    >{me?.active ? 'Repair CI' : 'Active colleague required'}</button
+                  >{/if}{#if nearby}<button
                     class="primary wide"
                     disabled={session.completed.includes(nearby.id) || session.incident}
                     onclick={openTask}
@@ -877,6 +955,33 @@
   </footer>
 </div>
 
+{#if session?.phase === 'meeting-result' && session.meetingResult}
+  <div class="meeting-result-backdrop">
+    <div
+      class:success={session.meetingResult.testerIdentified}
+      class="meeting-result-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="meeting-result-title"
+      aria-describedby="meeting-result-message meeting-result-countdown"
+    >
+      <div class="meeting-result-icon" aria-hidden="true">
+        {session.meetingResult.testerIdentified ? '✓' : '×'}
+      </div>
+      <div class="eyebrow">STANDUP RESULT</div>
+      <h2 id="meeting-result-title">
+        {session.meetingResult.testerIdentified
+          ? 'Tester identified'
+          : 'Tester not identified'}
+      </h2>
+      <p id="meeting-result-message">{session.meetingResult.message}</p>
+      <div id="meeting-result-countdown" class="meeting-result-countdown" aria-live="polite">
+        {session.meetingResult.continues ? 'Resuming' : 'Sprint ending'} in {seconds}…
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if station && session?.phase === 'work'}
   <div class="modal-backdrop">
     <div
@@ -943,7 +1048,7 @@
       <p>
         Call one standup per person at the central table, or report a nearby training notice.
         Discuss on Teams and vote here within 40 seconds. Ties and skips remove nobody. Work time
-        pauses during voting.
+        pauses through voting and the three-second result countdown.
       </p>
       <p>
         If you are on training, finish your tickets, but don’t vote or reveal what you saw on Teams.

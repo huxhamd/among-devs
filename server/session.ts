@@ -36,6 +36,13 @@ export class Session {
     started: number;
     votes: Map<string, string>;
   } | null = null;
+  meetingResult: {
+    testerIdentified: boolean;
+    message: string;
+    deadline: number;
+    started: number;
+    continues: boolean;
+  } | null = null;
   result = '';
   winner: Role | null = null;
   created = Date.now();
@@ -115,6 +122,7 @@ export class Session {
     this.incident = false;
     this.sabotageReady = now + 20_000;
     this.meeting = null;
+    this.meetingResult = null;
     this.result = '';
     this.winner = null;
   }
@@ -123,6 +131,7 @@ export class Session {
     this.winner = winner;
     this.result = result;
     this.meeting = null;
+    this.meetingResult = null;
   }
   checkWin() {
     if (this.phase === 'ended' || this.phase === 'lobby') return;
@@ -162,6 +171,7 @@ export class Session {
         this.result = '';
         this.winner = null;
         this.incident = false;
+        this.meetingResult = null;
         return;
       }
       throw new Error('That action is unavailable right now.');
@@ -261,6 +271,7 @@ export class Session {
   }
   resolveMeeting(now: number) {
     if (!this.meeting) return;
+    const meetingStarted = this.meeting.started;
     const tally = new Map<string, number>();
     for (const p of this.players.filter((p) => p.active)) {
       const vote = this.meeting.votes.get(p.id) ?? 'skip';
@@ -268,21 +279,44 @@ export class Session {
     }
     const ranking = [...tally.entries()].sort((a, b) => b[1] - a[1]);
     const top = ranking[0];
-    this.result = 'No consensus. A very productive meeting, then.';
+    let testerIdentified = false;
+    this.result = 'No consensus. No one was sent on mandatory training.';
     if (top && top[0] !== 'skip' && (!ranking[1] || top[1] > ranking[1][1])) {
       const target = this.players.find((p) => p.id === top[0])!;
       target.active = false;
       target.reported = true;
-      this.result = `${target.name} was sent on mandatory training. Their role stays confidential until the end.`;
+      testerIdentified = target.role === 'tester';
+      this.result = testerIdentified
+        ? `${target.name} was identified as the tester.`
+        : `${target.name} was sent on mandatory training, but the tester remains at large.`;
     }
-    const duration = now - this.meeting.started;
+    this.pauseTimers(now - meetingStarted, now);
+    this.meeting = null;
+    const testerWins =
+      !testerIdentified &&
+      this.initialCount > 3 &&
+      this.players.filter((p) => p.role === 'dev' && p.active).length <= 1;
+    this.meetingResult = {
+      testerIdentified,
+      message: this.result,
+      deadline: now + 3_000,
+      started: now,
+      continues: !testerIdentified && !testerWins
+    };
+    this.phase = 'meeting-result';
+  }
+  pauseTimers(duration: number, now: number) {
     this.deadline += duration;
     this.sabotageReady += duration;
     this.players.forEach((p) => {
       p.cooldown += duration;
       p.lastMove = now;
     });
-    this.meeting = null;
+  }
+  finishMeetingResult(now: number) {
+    if (!this.meetingResult) return;
+    this.pauseTimers(now - this.meetingResult.started, now);
+    this.meetingResult = null;
     this.phase = 'work';
     this.checkWin();
   }
@@ -302,6 +336,12 @@ export class Session {
     }
     if (this.phase === 'meeting' && this.meeting && now >= this.meeting.deadline)
       this.resolveMeeting(now);
+    if (
+      this.phase === 'meeting-result' &&
+      this.meetingResult &&
+      now >= this.meetingResult.deadline
+    )
+      this.finishMeetingResult(now);
     if (this.phase === 'work' && now >= this.deadline)
       this.end(
         'tester',
@@ -350,6 +390,14 @@ export class Session {
             deadline: this.meeting.deadline,
             votes: [...this.meeting.votes.keys()],
             yourVote: this.meeting.votes.get(id) ?? null
+          }
+        : null,
+      meetingResult: this.meetingResult
+        ? {
+            testerIdentified: this.meetingResult.testerIdentified,
+            message: this.meetingResult.message,
+            deadline: this.meetingResult.deadline,
+            continues: this.meetingResult.continues
           }
         : null,
       result:

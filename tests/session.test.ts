@@ -86,7 +86,7 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   assert.equal(room.winner, 'dev');
   assert.equal(room.snapshot(dev.id).progress, 12);
 });
-test('votes are final, resolve privately and pause the work deadline', () => {
+test('a successful vote shows a synchronized result before ending the sprint', () => {
   const room = setup();
   const caller = room.players[0];
   caller.x = 500;
@@ -99,8 +99,20 @@ test('votes are final, resolve privately and pause the work deadline', () => {
   assert.equal(room.snapshot(room.players[1].id).meeting?.yourVote, null);
   for (const person of room.players.slice(1))
     room.action(person.id, { type: 'vote', target: tester.id }, 35000);
+  assert.equal(room.phase, 'meeting-result');
+  assert.equal(room.winner, null);
+  assert.deepEqual(room.snapshot(caller.id, 35000).meetingResult, {
+    testerIdentified: true,
+    message: `${tester.name} was identified as the tester.`,
+    deadline: 38000,
+    continues: false
+  });
+  assert.throws(() => room.action(caller.id, { type: 'move', dx: 1, dy: 0 }, 36000), /resumes/);
+  room.tick(37999);
+  assert.equal(room.phase, 'meeting-result');
+  room.tick(38000);
   assert.equal(room.winner, 'dev');
-  assert.equal(room.deadline, original + 5000);
+  assert.equal(room.deadline, original + 8000);
 });
 test('a tied vote and abstentions send nobody on training', () => {
   const room = setup();
@@ -115,16 +127,46 @@ test('a tied vote and abstentions send nobody on training', () => {
     room.players.every((p) => p.active),
     true
   );
+  assert.deepEqual(room.snapshot(caller.id, 31000).meetingResult, {
+    testerIdentified: false,
+    message: 'No consensus. No one was sent on mandatory training.',
+    deadline: 34000,
+    continues: true
+  });
+  room.tick(34000);
+  assert.equal(room.phase, 'work');
   const other = room.players[1];
   other.x = 500;
   other.y = 310;
-  room.action(other.id, { type: 'meeting' }, 32000);
-  room.action(other.id, { type: 'vote', target: room.players[2].id }, 33000);
-  room.tick(72000);
+  room.action(other.id, { type: 'meeting' }, 35000);
+  room.action(other.id, { type: 'vote', target: room.players[2].id }, 36000);
+  room.tick(75000);
+  assert.equal(room.phase, 'meeting-result');
+  room.tick(78000);
   assert.equal(
     room.players.every((p) => p.active),
     true
   );
+});
+test('voting out a dev reports that the tester was not identified, then resumes', () => {
+  const room = setup();
+  const caller = room.players[0];
+  const target = room.players.find((p) => p.role === 'dev' && p !== caller)!;
+  caller.x = 500;
+  caller.y = 310;
+  room.action(caller.id, { type: 'meeting' }, 30000);
+  for (const person of room.players)
+    room.action(person.id, { type: 'vote', target: target.id }, 31000);
+  assert.equal(target.active, false);
+  assert.deepEqual(room.snapshot(caller.id, 31000).meetingResult, {
+    testerIdentified: false,
+    message: `${target.name} was sent on mandatory training, but the tester remains at large.`,
+    deadline: 34000,
+    continues: true
+  });
+  room.tick(34000);
+  assert.equal(room.phase, 'work');
+  assert.equal(room.winner, null);
 });
 test('three-person rounds cannot end on the first training action', () => {
   const room = setup(3);

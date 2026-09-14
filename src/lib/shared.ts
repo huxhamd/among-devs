@@ -70,7 +70,7 @@ export const WALLS = [
   { x: 0, y: 302, w: 315, h: 16 },
   { x: 685, y: 302, w: 315, h: 16 }
 ];
-export type Phase = 'lobby' | 'work' | 'meeting' | 'ended';
+export type Phase = 'lobby' | 'work' | 'meeting' | 'meeting-result' | 'ended';
 export type Role = 'dev' | 'tester';
 export type Person = {
   id: string;
@@ -101,6 +101,12 @@ export type Snapshot = {
   incident: boolean;
   meetingsLeft: number;
   meeting: { caller: string; deadline: number; votes: string[]; yourVote: string | null } | null;
+  meetingResult: {
+    testerIdentified: boolean;
+    message: string;
+    deadline: number;
+    continues: boolean;
+  } | null;
   result: string;
   winner: Role | null;
 };

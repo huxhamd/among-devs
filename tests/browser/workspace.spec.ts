@@ -28,7 +28,8 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const tester = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
     const testerIndex = tester.findIndex((role) => role.includes('THE TESTER'));
     expect(testerIndex).toBeGreaterThanOrEqual(0);
-    const repairPage = pages.find((_, index) => index !== 0 && index !== testerIndex)!;
+    const repairIndex = pages.findIndex((_, index) => index !== 0 && index !== testerIndex);
+    const repairPage = pages[repairIndex];
     await expect(
       repairPage.locator('.map-panel').getByText('CI operational', { exact: true })
     ).toBeVisible();
@@ -42,7 +43,18 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const bannerHeightBeforeIncident = await ciBanner.evaluate(
       (element) => element.getBoundingClientRect().height
     );
-    await pages[testerIndex].getByRole('button', { name: /^Break CI/ }).click();
+    const testerPage = pages[testerIndex];
+    const testerMap = testerPage.locator('.map-panel');
+    await testerPage.keyboard.down('w');
+    try {
+      await expect(testerMap.getByText(/Break CI ready in \d+s/)).toBeVisible();
+      await expect(testerMap.getByText('E — Break CI', { exact: true })).toBeVisible({
+        timeout: 25_000
+      });
+    } finally {
+      await testerPage.keyboard.up('w');
+    }
+    await testerPage.keyboard.press('e');
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
     await expect(ciBanner).toHaveClass(/offline/);
     await expect(ciBanner.locator('.online')).toBeHidden();
@@ -65,6 +77,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     } finally {
       await repairPage.keyboard.up('w');
     }
+    await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toBeVisible();
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
     for (const page of pages)
@@ -74,6 +87,11 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(ciBanner).not.toHaveClass(/offline/);
     await expect(ciBanner.locator('.online')).toBeVisible();
     await expect(ciBanner.locator('.outage')).toBeHidden();
+    await expect(
+      repairPage.locator('.map-panel').getByText('CI operational ✓', { exact: true })
+    ).toBeVisible();
+    await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
+    await expect(testerMap.getByText(/Break CI ready in \d+s/)).toBeVisible();
     const mapTopAfterIncident = await repairPage
       .locator('.map-panel')
       .evaluate((element) => element.getBoundingClientRect().top);
@@ -93,17 +111,63 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await pages[2].reload();
     await expect(pages[2].getByText('Operation: ship it.')).toBeVisible();
     await expect(pages[2].locator('.role-tag')).toHaveText(tester[2]);
-    await pages[0].keyboard.down('d');
-    await pages[0].waitForTimeout(350);
-    await pages[0].keyboard.up('d');
-    await pages[0].getByRole('button', { name: 'Call standup' }).click();
+    const standupIndex = pages.findIndex(
+      (_, index) => index !== testerIndex && index !== repairIndex
+    );
+    const standupPage = pages[standupIndex];
+    await standupPage.keyboard.down('d');
+    try {
+      await expect(standupPage.getByRole('button', { name: 'Call standup' })).toBeVisible();
+    } finally {
+      await standupPage.keyboard.up('d');
+    }
+    await expect(
+      standupPage.locator('.map-panel').getByText('E — Call standup', { exact: true })
+    ).toBeVisible();
+    await standupPage.keyboard.press('e');
     for (const page of pages)
       await expect(page.getByText('Who’s blocking the release?')).toBeVisible();
     await pages[0].screenshot({ path: 'test-results/standup.png', fullPage: true });
     for (const page of pages)
+      await page.getByRole('button', { name: 'Skip · insufficient evidence' }).click();
+    const missedResults = pages.map((page) =>
+      page.getByRole('dialog', { name: 'Tester not identified' })
+    );
+    await Promise.all(missedResults.map((result) => expect(result).toBeVisible()));
+    await Promise.all(
+      missedResults.map(async (result) => {
+        await expect(result.locator('.meeting-result-icon')).toHaveText('×');
+        await expect(result).toContainText(/Resuming in [123]…/);
+      })
+    );
+    await pages[0].screenshot({ path: 'test-results/standup-result-missed.png', fullPage: true });
+    for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
+
+    const secondStandupPage = pages[testerIndex];
+    await secondStandupPage.keyboard.down('s');
+    try {
+      await expect(secondStandupPage.getByRole('button', { name: 'Call standup' })).toBeVisible();
+    } finally {
+      await secondStandupPage.keyboard.up('s');
+    }
+    await secondStandupPage.keyboard.press('e');
+    for (const page of pages)
+      await expect(page.getByText('Who’s blocking the release?')).toBeVisible();
+    for (const page of pages)
       await page
         .getByRole('button', { name: new RegExp(['Alex', 'Sam', 'Jo'][testerIndex]) })
         .click();
+    const results = pages.map((page) =>
+      page.getByRole('dialog', { name: 'Tester identified' })
+    );
+    await Promise.all(results.map((result) => expect(result).toBeVisible()));
+    await Promise.all(
+      results.map(async (result) => {
+        await expect(result.locator('.meeting-result-icon')).toHaveText('✓');
+        await expect(result).toContainText(/Sprint ending in [123]…/);
+      })
+    );
+    await pages[0].screenshot({ path: 'test-results/standup-result-identified.png', fullPage: true });
     for (const page of pages)
       await expect(page.getByText('Against all odds, shipped.')).toBeVisible();
     await pages[0].getByRole('button', { name: 'Back to lobby' }).click();
