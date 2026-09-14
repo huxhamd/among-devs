@@ -37,11 +37,19 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     await testerPage.keyboard.up(testerIndex < 2 ? 'd' : 'a');
     const testerMap = testerPage.locator('.map-panel');
     await expect(testerMap.getByText('E — Call standup', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText(/^Training ready in \d+s$/)).toHaveCount(0);
 
     await expect(trainingButton).toBeDisabled();
     await testerPage.keyboard.press('t');
     for (const page of pages)
       await expect(page.locator('.role-tag')).not.toContainText('ON TRAINING');
+
+    const nearbyDevIndex = testerIndex < 2 ? testerIndex + 1 : testerIndex - 1;
+    await Promise.all([testerPage.keyboard.down('w'), pages[nearbyDevIndex].keyboard.down('w')]);
+    await testerPage.waitForTimeout(700);
+    await Promise.all([testerPage.keyboard.up('w'), pages[nearbyDevIndex].keyboard.up('w')]);
+    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
+    await expect(testerMap.getByText(/^Training ready in \d+s$/)).toBeVisible();
 
     await expect(trainingButton).toBeEnabled({ timeout: 30_000 });
     const trainingLabel = await trainingButton.innerText();
@@ -49,6 +57,8 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     expect(targetName).toBeTruthy();
     const targetIndex = names.indexOf(targetName!);
     expect(targetIndex).toBeGreaterThanOrEqual(0);
+    await expect(testerMap.getByText('T — Send Dev on training', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
 
     await testerPage.keyboard.press('t');
     await expect(pages[targetIndex].locator('.role-tag')).toContainText('ON TRAINING');

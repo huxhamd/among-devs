@@ -84,6 +84,20 @@
   let sabotageCooldown = $derived(
     session ? Math.max(0, Math.ceil((session.sabotageReady - session.now) / 1000)) : 0
   );
+  let eligibleTrainingTarget = $derived(
+    session?.phase === 'work' &&
+      session.role === 'tester' &&
+      session.players.length > 3 &&
+      me?.active
+      ? target
+      : undefined
+  );
+  let trainingTarget = $derived(cooldown === 0 ? eligibleTrainingTarget : undefined);
+  let trainingCooldownTarget = $derived(
+    cooldown > 0 && !report && !nearby && !atTable && !atConsole
+      ? eligibleTrainingTarget
+      : undefined
+  );
 
   function dismissNotice(expectedId?: number) {
     if (expectedId !== undefined && notice?.id !== expectedId) return;
@@ -756,7 +770,7 @@
                     font-size="11"
                     >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
                   >
-                  {#if atConsole && !report}
+                  {#if atConsole && !report && !trainingTarget}
                     <rect
                       x="-105"
                       y="76"
@@ -797,7 +811,7 @@
                 /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
                   >STANDUP</text
                 >
-                {#if atTable && me?.active && !report}
+                {#if atTable && me?.active && !report && !trainingTarget}
                   <rect
                     x="395"
                     y="364"
@@ -823,7 +837,9 @@
                       height="55"
                       rx="10"
                       fill={session.completed.includes(item.id) ? '#25463e' : '#4a5262'}
-                      stroke={nearby?.id === item.id && !report ? '#c3b6ff' : '#637082'}
+                      stroke={nearby?.id === item.id && !report && !trainingTarget
+                        ? '#c3b6ff'
+                        : '#637082'}
                       stroke-width="2"
                     /><text
                       x={item.x}
@@ -837,7 +853,7 @@
                       text-anchor="middle"
                       fill="#b9c2d1"
                       font-size="12">{item.name}</text
-                    >{#if nearby?.id === item.id && !report}<rect
+                    >{#if nearby?.id === item.id && !report && !trainingTarget}<rect
                         x={item.x - 95}
                         y={item.y + 68}
                         width="190"
@@ -909,6 +925,32 @@
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">E — Report training notice</text
+                      >{:else if trainingTarget?.id === person.id}<rect
+                        x="-105"
+                        y={person.y > 555 ? -74 : 34}
+                        width="210"
+                        height="27"
+                        rx="5"
+                        fill="#17212b"
+                        stroke="#fda4af"
+                      /><text
+                        y={person.y > 555 ? -56 : 52}
+                        text-anchor="middle"
+                        fill="#ffffff"
+                        font-size="14">T — Send Dev on training</text
+                      >{:else if trainingCooldownTarget?.id === person.id}<rect
+                        x="-105"
+                        y={person.y > 555 ? -74 : 34}
+                        width="210"
+                        height="27"
+                        rx="5"
+                        fill="#17212b"
+                        stroke="#83909e"
+                      /><text
+                        y={person.y > 555 ? -56 : 52}
+                        text-anchor="middle"
+                        fill="#ffffff"
+                        font-size="14">Training ready in {cooldown}s</text
                       >{/if}</g
                   >{/each}
               </svg>
