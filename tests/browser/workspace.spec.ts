@@ -44,7 +44,18 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await repairPage.keyboard.press('e');
     for (const page of pages)
       await expect(page.getByText('CI operational', { exact: true })).toBeVisible();
-    await expect(repairPage.getByText('CI restored. Tickets are available again.')).toBeVisible();
+    const repairToast = repairPage.getByRole('status');
+    await expect(repairToast).toContainText('CI restored. Tickets are available again.');
+    await expect(repairToast.locator('.toast-progress')).toBeVisible();
+    await repairToast.hover();
+    await expect(repairToast.locator('.toast-progress')).toHaveCSS(
+      'animation-play-state',
+      'paused'
+    );
+    await repairPage.waitForTimeout(4200);
+    await expect(repairToast).toBeVisible();
+    await repairPage.mouse.move(0, 0);
+    await expect(repairToast).toBeHidden({ timeout: 5000 });
     await pages[2].reload();
     await expect(pages[2].getByText('Operation: ship it.')).toBeVisible();
     await expect(pages[2].locator('.role-tag')).toHaveText(tester[2]);

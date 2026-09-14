@@ -837,6 +837,12 @@ kbd {
   align-items: center;
   gap: 20px;
   max-width: 90vw;
+  overflow: hidden;
+}
+.toast.in-game {
+  right: 25px;
+  left: auto;
+  transform: none;
 }
 .toast.error {
   background: #503239;
@@ -847,6 +853,26 @@ kbd {
   background: none;
   color: inherit;
   font-size: 20px;
+}
+.toast-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.65;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: toast-fill var(--toast-duration) linear forwards;
+}
+.toast.paused .toast-progress {
+  animation-play-state: paused;
+}
+@keyframes toast-fill {
+  to {
+    transform: scaleX(1);
+  }
 }
 .modal-backdrop {
   position: fixed;
@@ -1024,6 +1050,16 @@ kbd {
     font-size: 24px;
   }
   .map-footer > span:last-child {
+    display: none;
+  }
+  .toast.in-game {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress {
     display: none;
   }
 }

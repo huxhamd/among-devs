@@ -11,13 +11,22 @@
   let connected = $state(false);
   let busy = $state(false);
   let error = $state('');
-  let notice = $state('');
+  type ToastNotice = { id: number; message: string; duration: number };
+  let notice = $state<ToastNotice | null>(null);
+  let noticePaused = $state(false);
   let stationId = $state('');
   let taskStarted = $state(0);
   let taskTime = $state(0);
   let copied = $state(false);
   let help = $state(false);
   const keys = new Set<string>();
+  const noticePauseReasons = new Set<'pointer' | 'focus'>();
+  const NOTICE_DURATION = 4000;
+  const GUIDANCE_DURATION = 8000;
+  let noticeId = 0;
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  let noticeStartedAt = 0;
+  let noticeRemaining = 0;
   let saved: { name: string; code: string; token: string } | null = null;
   let me = $derived(session?.players.find((p) => p.id === session?.self));
   let station = $derived(STATIONS.find((s) => s.id === stationId));
@@ -51,6 +60,46 @@
   let sabotageCooldown = $derived(
     session ? Math.max(0, Math.ceil((session.sabotageReady - session.now) / 1000)) : 0
   );
+
+  function dismissNotice(expectedId?: number) {
+    if (expectedId !== undefined && notice?.id !== expectedId) return;
+    clearTimeout(noticeTimer);
+    noticeTimer = undefined;
+    noticePauseReasons.clear();
+    noticePaused = false;
+    notice = null;
+  }
+  function startNoticeTimer() {
+    if (!notice || noticePaused) return;
+    const expectedId = notice.id;
+    noticeStartedAt = Date.now();
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => dismissNotice(expectedId), noticeRemaining);
+  }
+  function showNotice(message: string, duration = NOTICE_DURATION) {
+    clearTimeout(noticeTimer);
+    noticePauseReasons.clear();
+    noticePaused = false;
+    noticeRemaining = duration;
+    notice = { id: ++noticeId, message, duration };
+    startNoticeTimer();
+  }
+  function pauseNotice(reason: 'pointer' | 'focus') {
+    if (!notice || noticePauseReasons.has(reason)) return;
+    noticePauseReasons.add(reason);
+    if (noticePaused) return;
+    noticeRemaining = Math.max(0, noticeRemaining - (Date.now() - noticeStartedAt));
+    clearTimeout(noticeTimer);
+    noticeTimer = undefined;
+    noticePaused = true;
+  }
+  function resumeNotice(reason: 'pointer' | 'focus') {
+    noticePauseReasons.delete(reason);
+    if (!notice || noticePauseReasons.size > 0 || !noticePaused) return;
+    noticePaused = false;
+    if (noticeRemaining <= 0) dismissNotice(notice.id);
+    else startNoticeTimer();
+  }
 
   function enter(join: boolean, resume = false) {
     if (!connected || busy) return;
@@ -88,16 +137,18 @@
         error = timeout ? 'Connection interrupted. Try again.' : reply.error!;
       else if (action.type === 'task') {
         stationId = '';
-        notice = 'Ticket closed. Please resist adding scope.';
+        showNotice('Ticket closed. Please resist adding scope.');
       } else if (action.type === 'repair') {
-        notice = 'CI restored. Tickets are available again.';
+        showNotice('CI restored. Tickets are available again.');
       }
     });
   }
   function openTask() {
     if (session?.incident) {
-      notice =
-        'CI is down. Go to the CI Control Console at the top of the central office and press E to repair CI.';
+      showNotice(
+        'CI is down. Go to the CI Control Console at the top of the central office and press E to repair CI.',
+        GUIDANCE_DURATION
+      );
       return;
     }
     if (nearby) {
@@ -215,7 +266,10 @@
         if (atConsole) {
           if (session.incident && me?.active) act({ type: 'repair' });
           else
-            notice = session.incident ? 'An active colleague must repair CI.' : 'CI operational.';
+            showNotice(
+              session.incident ? 'An active colleague must repair CI.' : 'CI operational.',
+              session.incident ? GUIDANCE_DURATION : NOTICE_DURATION
+            );
         } else openTask();
       }
     };
@@ -237,6 +291,7 @@
     }, 50);
     return () => {
       clearInterval(timer);
+      clearTimeout(noticeTimer);
       socket.disconnect();
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
@@ -764,12 +819,32 @@
       <button class="quiet leave" onclick={leave}>← Leave workspace</button>
     </main>
   {/if}
-  {#if error}<div class="toast error" role="alert">
+  {#if error}<div class:in-game={session?.phase === 'work'} class="toast error" role="alert">
       {error}<button aria-label="Dismiss error" onclick={() => (error = '')}>×</button>
     </div>{/if}
-  {#if notice && !error}<div class="toast" role="status">
-      {notice}<button aria-label="Dismiss notification" onclick={() => (notice = '')}>×</button>
-    </div>{/if}
+  {#if notice && !error}
+    {#key notice.id}
+      <div
+        class:in-game={session?.phase === 'work'}
+        class:paused={noticePaused}
+        class="toast"
+        role="status"
+        style:--toast-duration={`${notice.duration}ms`}
+        onpointerenter={() => pauseNotice('pointer')}
+        onpointerleave={() => resumeNotice('pointer')}
+        onfocusin={() => pauseNotice('focus')}
+        onfocusout={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            resumeNotice('focus');
+        }}
+      >
+        {notice.message}<button aria-label="Dismiss notification" onclick={() => dismissNotice()}
+          >×</button
+        >
+        <span class="toast-progress" aria-hidden="true"></span>
+      </div>
+    {/key}
+  {/if}
   <footer>
     <span>BUILT FOR TEAMS. QUESTIONABLE FOR PRODUCTIVITY.</span><span
       >Less status update. More plot twist. <span class="footer-star">✳</span></span
