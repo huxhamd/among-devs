@@ -43,9 +43,12 @@
     )
   );
   let report = $derived(
-    session?.players.some(
-      (p) => p.visible && !p.active && !p.reported && me && Math.hypot(p.x - me.x, p.y - me.y) <= 80
-    )
+    session?.phase === 'work' && me?.active
+      ? session.players.find(
+          (p) =>
+            p.visible && !p.active && !p.reported && me && Math.hypot(p.x - me.x, p.y - me.y) <= 80
+        )
+      : undefined
   );
   let seconds = $derived(
     session
@@ -265,6 +268,37 @@
         help = false;
       }
       if (
+        key === 'b' &&
+        !event.repeat &&
+        connected &&
+        session?.phase === 'work' &&
+        !stationId &&
+        !help &&
+        session.role === 'tester' &&
+        me?.active &&
+        !session.incident &&
+        sabotageCooldown === 0
+      ) {
+        event.preventDefault();
+        act({ type: 'sabotage' });
+      }
+      if (
+        key === 't' &&
+        !event.repeat &&
+        connected &&
+        session?.phase === 'work' &&
+        !stationId &&
+        !help &&
+        session.role === 'tester' &&
+        session.players.length > 3 &&
+        me?.active &&
+        target &&
+        cooldown === 0
+      ) {
+        event.preventDefault();
+        act({ type: 'sideline', target: target.id });
+      }
+      if (
         key === 'e' &&
         !event.repeat &&
         connected &&
@@ -272,7 +306,9 @@
         !stationId &&
         !help
       ) {
-        if (atConsole) {
+        if (report && me?.active) {
+          act({ type: 'report' });
+        } else if (atConsole) {
           if (session.incident && me?.active) act({ type: 'repair' });
           else if (session.incident)
             showNotice('An active colleague must repair CI.', GUIDANCE_DURATION);
@@ -612,7 +648,7 @@
               <svg
                 viewBox="0 0 1000 620"
                 role="img"
-                aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, at the central table to call a standup, or at the top-centre CI Control Console to repair or break CI."
+                aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, at the central table to call a standup, or at the top-centre CI Control Console to repair or break CI. Testers can press B anywhere to break CI or T near a colleague to send them on training."
               >
                 <defs
                   ><pattern id="floor" width="40" height="40" patternUnits="userSpaceOnUse"
@@ -704,7 +740,7 @@
                     font-size="11"
                     >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
                   >
-                  {#if atConsole}
+                  {#if atConsole && !report}
                     <rect
                       x="-105"
                       y="76"
@@ -745,7 +781,7 @@
                 /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
                   >STANDUP</text
                 >
-                {#if atTable && me?.active}
+                {#if atTable && me?.active && !report}
                   <rect
                     x="395"
                     y="364"
@@ -771,7 +807,7 @@
                       height="55"
                       rx="10"
                       fill={session.completed.includes(item.id) ? '#25463e' : '#4a5262'}
-                      stroke={nearby?.id === item.id ? '#c3b6ff' : '#637082'}
+                      stroke={nearby?.id === item.id && !report ? '#c3b6ff' : '#637082'}
                       stroke-width="2"
                     /><text
                       x={item.x}
@@ -785,7 +821,7 @@
                       text-anchor="middle"
                       fill="#b9c2d1"
                       font-size="12">{item.name}</text
-                    >{#if nearby?.id === item.id}<rect
+                    >{#if nearby?.id === item.id && !report}<rect
                         x={item.x - 95}
                         y={item.y + 68}
                         width="190"
@@ -844,7 +880,20 @@
                       stroke-width="3"
                       paint-order="stroke"
                       >{person.name}{person.id === session.self ? ' (you)' : ''}</text
-                    ></g
+                    >{#if report?.id === person.id}<rect
+                        x="-105"
+                        y={person.y > 555 ? -74 : 34}
+                        width="210"
+                        height="27"
+                        rx="5"
+                        fill="#17212b"
+                        stroke="#c3b6ff"
+                      /><text
+                        y={person.y > 555 ? -56 : 52}
+                        text-anchor="middle"
+                        fill="#ffffff"
+                        font-size="14">E — Report training notice</text
+                      >{/if}</g
                   >{/each}
               </svg>
               <div class="map-footer">
@@ -875,31 +924,33 @@
                   </div>{/each}
               </div>
               <div class="context-actions">
-                {#if atConsole && session.incident}<button
+                {#if report && me?.active}<button
+                    class="secondary wide"
+                    onclick={() => act({ type: 'report' })}>Report training notice · E</button
+                  >{:else if atConsole && session.incident}<button
                     class="primary wide"
                     disabled={!me?.active}
                     onclick={() => act({ type: 'repair' })}
-                    >{me?.active ? 'Repair CI' : 'Active colleague required'}</button
-                  >{/if}{#if nearby}<button
+                    >{me?.active ? 'Repair CI · E' : 'Active colleague required'}</button
+                  >{/if}{#if nearby && !report}<button
                     class="primary wide"
                     disabled={session.completed.includes(nearby.id) || session.incident}
                     onclick={openTask}
                     >{session.completed.includes(nearby.id)
                       ? 'Ticket already closed ✓'
                       : 'Open ticket · E'}</button
-                  >{/if}{#if atTable && me?.active}<button
+                  >{/if}{#if atTable && me?.active && !report}<button
                     class="secondary wide"
                     disabled={!session.meetingsLeft || session.incident}
                     onclick={() => act({ type: 'meeting' })}
-                    >Call standup ({session.meetingsLeft} left)</button
-                  >{/if}{#if report && me?.active}<button
-                    class="secondary wide"
-                    onclick={() => act({ type: 'report' })}>Report training notice</button
+                    >Call standup ({session.meetingsLeft} left) · E</button
                   >{/if}{#if session.role === 'tester' && me?.active}<button
                     class="sabotage wide"
                     disabled={session.incident || sabotageCooldown > 0}
                     onclick={() => act({ type: 'sabotage' })}
-                    >Break CI {sabotageCooldown ? `· ${sabotageCooldown}s` : ''}</button
+                    >{sabotageCooldown
+                      ? `Break CI ready in ${sabotageCooldown}s`
+                      : 'Break CI · B'}</button
                   >{#if session.players.length > 3}<button
                       class="sabotage wide"
                       disabled={!target || cooldown > 0}
@@ -907,7 +958,7 @@
                       >{cooldown
                         ? `Training ready in ${cooldown}s`
                         : target
-                          ? `Send ${target.name} on training`
+                          ? `Send ${target.name} on training · T`
                           : 'Move near a dev to send on training'}</button
                     >{:else}<small>Three-person sprint: win by running out the clock.</small
                     >{/if}{/if}
@@ -970,9 +1021,7 @@
       </div>
       <div class="eyebrow">STANDUP RESULT</div>
       <h2 id="meeting-result-title">
-        {session.meetingResult.testerIdentified
-          ? 'Tester identified'
-          : 'Tester not identified'}
+        {session.meetingResult.testerIdentified ? 'Tester identified' : 'Tester not identified'}
       </h2>
       <p id="meeting-result-message">{session.meetingResult.message}</p>
       <div id="meeting-result-countdown" class="meeting-result-countdown" aria-live="polite">
@@ -1040,10 +1089,11 @@
         office. Press <b>E</b> near a workstation to work on a ticket.
       </p>
       <p>
-        The tester can break CI every 45 seconds and send a nearby colleague on training every 30
-        seconds. To repair CI, go to the CI Control Console at the top of the central office and
-        press <b>E</b>. The Server Cupboard’s restart task is a separate ticket. With three people,
-        the tester’s training action is disabled.
+        The tester can press <b>B</b> anywhere to break CI every 45 seconds and press <b>T</b> to
+        send a nearby colleague on training every 30 seconds. To repair CI, go to the CI Control
+        Console at the top of the central office and press <b>E</b>. The tester can also press
+        <b>E</b> at that console to break CI. The Server Cupboard’s restart task is a separate ticket.
+        With three people, the tester’s training action is disabled.
       </p>
       <p>
         Call one standup per person at the central table, or report a nearby training notice.

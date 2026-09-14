@@ -1,5 +1,68 @@
 import { test, expect } from '@playwright/test';
 
+test('the tester can send a nearby colleague on training with T when ready', async ({
+  browser
+}) => {
+  const names = ['Ada', 'Linus', 'Grace', 'Ken'];
+  const contexts = await Promise.all(names.map(() => browser.newContext()));
+  const pages = await Promise.all(contexts.map((context) => context.newPage()));
+  const errors: string[] = [];
+  pages.forEach((page) => page.on('pageerror', (error) => errors.push(error.message)));
+  try {
+    for (const page of pages) await page.goto('/');
+    await pages[0].getByLabel('YOUR DISPLAY NAME').fill(names[0]);
+    await pages[0].getByRole('button', { name: 'Create a workspace' }).click();
+    const codeText = await pages[0].locator('.code-box button').innerText();
+    const code = codeText.trim().slice(0, 6);
+    for (let i = 1; i < pages.length; i++) {
+      await pages[i].getByLabel('YOUR DISPLAY NAME').fill(names[i]);
+      await pages[i].getByLabel('WORKSPACE CODE').fill(code);
+      await pages[i].getByRole('button', { name: 'Join →', exact: true }).click();
+    }
+    await pages[0].getByRole('button', { name: 'Start sprint' }).click();
+    for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
+
+    const roles = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
+    const testerIndex = roles.findIndex((role) => role.includes('THE TESTER'));
+    expect(testerIndex).toBeGreaterThanOrEqual(0);
+    const testerPage = pages[testerIndex];
+    const trainingButton = testerPage.locator('.context-actions button.sabotage').nth(1);
+
+    await testerPage.keyboard.down(testerIndex < 2 ? 'd' : 'a');
+    await testerPage.waitForTimeout(400);
+    await testerPage.keyboard.up(testerIndex < 2 ? 'd' : 'a');
+    const testerMap = testerPage.locator('.map-panel');
+    await expect(testerMap.getByText('E — Call standup', { exact: true })).toBeVisible();
+
+    await expect(trainingButton).toBeDisabled();
+    await testerPage.keyboard.press('t');
+    for (const page of pages)
+      await expect(page.locator('.role-tag')).not.toContainText('ON TRAINING');
+
+    await expect(trainingButton).toBeEnabled({ timeout: 30_000 });
+    const trainingLabel = await trainingButton.innerText();
+    const targetName = trainingLabel.match(/^Send (.+) on training · T$/)?.[1];
+    expect(targetName).toBeTruthy();
+    const targetIndex = names.indexOf(targetName!);
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+
+    await testerPage.keyboard.press('t');
+    await expect(pages[targetIndex].locator('.role-tag')).toContainText('ON TRAINING');
+    await expect(trainingButton).toBeDisabled();
+    await expect(
+      testerPage.getByRole('button', { name: 'Report training notice · E', exact: true })
+    ).toBeVisible();
+    await expect(testerMap.getByText('E — Report training notice', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
+    await testerPage.keyboard.press('e');
+    for (const page of pages)
+      await expect(page.getByText('Who’s blocking the release?')).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('three colleagues join, move, vote, reconnect and return to the lobby', async ({
   browser
 }) => {
@@ -45,16 +108,13 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     );
     const testerPage = pages[testerIndex];
     const testerMap = testerPage.locator('.map-panel');
-    await testerPage.keyboard.down('w');
-    try {
-      await expect(testerMap.getByText(/Break CI ready in \d+s/)).toBeVisible();
-      await expect(testerMap.getByText('E — Break CI', { exact: true })).toBeVisible({
-        timeout: 25_000
-      });
-    } finally {
-      await testerPage.keyboard.up('w');
-    }
-    await testerPage.keyboard.press('e');
+    const breakCiButton = testerPage.locator('.context-actions button.sabotage').first();
+    await expect(breakCiButton).toBeDisabled();
+    await expect(breakCiButton).toBeEnabled({ timeout: 25_000 });
+    await expect(breakCiButton).toHaveText('Break CI · B');
+    await testerPage.keyboard.press('b');
+    await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
+    await testerPage.keyboard.press('b');
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
     await expect(ciBanner).toHaveClass(/offline/);
     await expect(ciBanner.locator('.online')).toBeHidden();
@@ -77,7 +137,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     } finally {
       await repairPage.keyboard.up('w');
     }
-    await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toBeVisible();
+    await expect(
+      repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+    ).toBeVisible();
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
     for (const page of pages)
@@ -91,7 +153,11 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
       repairPage.locator('.map-panel').getByText('CI operational ✓', { exact: true })
     ).toBeVisible();
     await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
-    await expect(testerMap.getByText(/Break CI ready in \d+s/)).toBeVisible();
+    await expect(breakCiButton).toBeDisabled();
+    await testerPage.keyboard.press('b');
+    await expect(
+      repairPage.locator('.map-panel').getByText('CI operational', { exact: true })
+    ).toBeVisible();
     const mapTopAfterIncident = await repairPage
       .locator('.map-panel')
       .evaluate((element) => element.getBoundingClientRect().top);
@@ -117,7 +183,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const standupPage = pages[standupIndex];
     await standupPage.keyboard.down('d');
     try {
-      await expect(standupPage.getByRole('button', { name: 'Call standup' })).toBeVisible();
+      await expect(
+        standupPage.getByRole('button', { name: /^Call standup \(\d+ left\) · E$/ })
+      ).toBeVisible();
     } finally {
       await standupPage.keyboard.up('d');
     }
@@ -146,7 +214,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const secondStandupPage = pages[testerIndex];
     await secondStandupPage.keyboard.down('s');
     try {
-      await expect(secondStandupPage.getByRole('button', { name: 'Call standup' })).toBeVisible();
+      await expect(
+        secondStandupPage.getByRole('button', { name: /^Call standup \(\d+ left\) · E$/ })
+      ).toBeVisible();
     } finally {
       await secondStandupPage.keyboard.up('s');
     }
@@ -157,9 +227,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
       await page
         .getByRole('button', { name: new RegExp(['Alex', 'Sam', 'Jo'][testerIndex]) })
         .click();
-    const results = pages.map((page) =>
-      page.getByRole('dialog', { name: 'Tester identified' })
-    );
+    const results = pages.map((page) => page.getByRole('dialog', { name: 'Tester identified' }));
     await Promise.all(results.map((result) => expect(result).toBeVisible()));
     await Promise.all(
       results.map(async (result) => {
@@ -167,7 +235,10 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
         await expect(result).toContainText(/Sprint ending in [123]…/);
       })
     );
-    await pages[0].screenshot({ path: 'test-results/standup-result-identified.png', fullPage: true });
+    await pages[0].screenshot({
+      path: 'test-results/standup-result-identified.png',
+      fullPage: true
+    });
     for (const page of pages)
       await expect(page.getByText('Against all odds, shipped.')).toBeVisible();
     await pages[0].getByRole('button', { name: 'Back to lobby' }).click();
