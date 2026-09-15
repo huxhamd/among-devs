@@ -1,3 +1,5 @@
+import type { TaskView } from './tasks.ts';
+
 export const COLORS = [
   '#a5b4fc',
   '#fda4af',
@@ -42,10 +44,7 @@ export const STATIONS = [
     room: 'Development',
     x: 160,
     y: 130,
-    symbol: '⌘',
-    answer: 'both',
-    prompt: 'Two branches contain useful changes. Keep…',
-    options: ['ours', 'theirs', 'both']
+    symbol: '⌘'
   },
   {
     id: 'build',
@@ -53,10 +52,7 @@ export const STATIONS = [
     room: 'Server cupboard',
     x: 840,
     y: 130,
-    symbol: '▥',
-    answer: 'restart',
-    prompt: 'The office server has stopped responding. Try…',
-    options: ['restart', 'panic', 'blame DNS']
+    symbol: '▥'
   },
   {
     id: 'coffee',
@@ -64,10 +60,7 @@ export const STATIONS = [
     room: 'Kitchen',
     x: 160,
     y: 490,
-    symbol: '☕',
-    answer: 'beans',
-    prompt: 'The team is running on empty. Add…',
-    options: ['story points', 'beans', 'another meeting']
+    symbol: '☕'
   },
   {
     id: 'ticket',
@@ -75,10 +68,7 @@ export const STATIONS = [
     room: 'Product corner',
     x: 840,
     y: 490,
-    symbol: '✓',
-    answer: 'ticket',
-    prompt: 'Where should the acceptance criteria live?',
-    options: ['someone’s head', 'ticket', 'a lost sticky note']
+    symbol: '✓'
   }
 ] as const;
 // Dividers have wide, visible doorways. Server and client share collision geometry.
@@ -113,6 +103,7 @@ export type Snapshot = {
   self: string;
   role: Role | null;
   tasks: string[];
+  puzzles: Record<string, TaskView>;
   completed: string[];
   progress: number;
   total: number;
@@ -137,7 +128,7 @@ export type Action =
   | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'repair' | 'report' }
   | { type: 'move'; dx: number; dy: number }
   | { type: 'sideline'; target: string }
-  | { type: 'task'; station: string; answer: string }
+  | { type: 'task'; station: string; puzzle: string; step: number; answer: string }
   | { type: 'vote'; target: string };
 export type Reply = { error?: string; token?: string; code?: string };
 export function walkable(x: number, y: number) {

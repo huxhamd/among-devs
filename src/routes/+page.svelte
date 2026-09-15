@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
+  import MiniTask from '$lib/MiniTask.svelte';
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
@@ -27,8 +28,23 @@
   let notice = $state<ToastNotice | null>(null);
   let noticePaused = $state(false);
   let stationId = $state('');
-  let taskStarted = $state(0);
-  let taskTime = $state(0);
+  let taskPending = $state(false);
+  let taskError = $state('');
+  // Local playtest counters only: no names, roles, answers, or network telemetry.
+  const taskMetrics: Record<
+    string,
+    { activeMs: number; attempts: number; failures: number; completions: number }
+  > = {};
+  function metric(id: string) {
+    return (taskMetrics[id] ??= { activeMs: 0, attempts: 0, failures: 0, completions: 0 });
+  }
+  function saveTaskMetrics() {
+    try {
+      sessionStorage.setItem('among-devs-task-metrics', JSON.stringify(taskMetrics));
+    } catch {
+      /* Storage is optional. */
+    }
+  }
   let copied = $state(false);
   let help = $state(false);
   const keys = new Set<string>();
@@ -176,13 +192,37 @@
     socket.timeout(5000).emit('action', action, (timeout: Error | null, reply: Reply) => {
       if (timeout || reply.error)
         error = timeout ? 'Connection interrupted. Try again.' : reply.error!;
-      else if (action.type === 'task') {
-        stationId = '';
-        showNotice('Ticket closed. Please resist adding scope.');
-      } else if (action.type === 'repair') {
+      else if (action.type === 'repair') {
         showNotice('CI restored. Tickets are available again.');
       }
     });
+  }
+  function submitTask(answer: string) {
+    const puzzle = session?.puzzles[stationId];
+    if (!puzzle || taskPending || !connected) return;
+    taskPending = true;
+    taskError = '';
+    const submittedStation = stationId;
+    metric(submittedStation).attempts++;
+    socket
+      .timeout(5000)
+      .emit(
+        'action',
+        {
+          type: 'task',
+          station: stationId,
+          puzzle: puzzle.id,
+          step: puzzle.step,
+          answer
+        } satisfies Action,
+        (timeout: Error | null, reply: Reply) => {
+          taskPending = false;
+          if (timeout || reply.error)
+            taskError = timeout ? 'Connection interrupted. Retry this step.' : reply.error!;
+          if (reply?.error?.includes('refinement')) metric(submittedStation).failures++;
+          saveTaskMetrics();
+        }
+      );
   }
   function openTask() {
     if (session?.incident) {
@@ -198,8 +238,7 @@
         return;
       }
       stationId = nearby.id;
-      taskStarted = Date.now();
-      taskTime = 0;
+      taskError = '';
       keys.clear();
     }
   }
@@ -249,6 +288,21 @@
   }
   onMount(() => {
     try {
+      const stored = JSON.parse(sessionStorage.getItem('among-devs-task-metrics') || '{}');
+      for (const station of STATIONS) {
+        const value = stored[station.id];
+        if (
+          value &&
+          ['activeMs', 'attempts', 'failures', 'completions'].every(
+            (key) => Number.isFinite(value[key]) && value[key] >= 0
+          )
+        )
+          taskMetrics[station.id] = value;
+      }
+    } catch {
+      /* Start fresh if local metrics are unavailable. */
+    }
+    try {
       saved = JSON.parse(sessionStorage.getItem('among-devs-seat') || 'null');
       if (saved) {
         name = saved.name;
@@ -285,6 +339,12 @@
         renderedPositions = {};
       }
       session = next;
+      if (stationId && next.completed.includes(stationId)) {
+        metric(stationId).completions++;
+        saveTaskMetrics();
+        stationId = '';
+        showNotice('Ticket closed. Please resist adding scope.');
+      }
       if (next.phase !== 'work') {
         stationId = '';
         keys.clear();
@@ -383,8 +443,20 @@
       animationFrame = requestAnimationFrame(animateMovement);
     };
     animationFrame = requestAnimationFrame(animateMovement);
+    let lastTaskTick = Date.now();
     const timer = setInterval(() => {
-      if (stationId) taskTime = Date.now() - taskStarted;
+      const now = Date.now();
+      if (
+        connected &&
+        session?.phase === 'work' &&
+        stationId &&
+        !session.incident &&
+        !document.hidden
+      ) {
+        metric(stationId).activeMs += Math.min(100, now - lastTaskTick);
+        saveTaskMetrics();
+      }
+      lastTaskTick = now;
       if (!connected || session?.phase !== 'work' || stationId || help) return;
       const dx =
         Number(keys.has('d') || keys.has('arrowright')) -
@@ -1161,21 +1233,18 @@
       >
       <div class="eyebrow">{station.room} · TICKET IN PROGRESS</div>
       <h2>{station.name}</h2>
-      <p>{station.prompt}</p>
-      <div class="task-options">
-        {#each station.options as answer}<button
-            class="secondary"
-            disabled={taskTime < 3000 || session.incident}
-            onclick={() => act({ type: 'task', station: station!.id, answer })}>{answer}</button
-          >{/each}
-      </div>
-      <small class="muted"
-        >{session.incident
-          ? 'CI is down. Press Esc, then go to the CI Control Console at the top of the central office and press E to repair CI.'
-          : taskTime < 3000
-            ? 'Reviewing the requirements…'
-            : 'Select an answer to close the ticket.'}</small
-      >
+      {#if session.puzzles[station.id]}
+        <MiniTask
+          puzzle={session.puzzles[station.id]}
+          disabled={taskPending || session.incident || !connected}
+          submit={submitTask}
+        />
+      {/if}
+      {#if taskError}<p role="alert">{taskError}</p>{/if}
+      {#if session.incident}<p role="status">
+          CI is down. Press Esc and go to the CI Control Console to repair it. Your accepted steps
+          are saved.
+        </p>{/if}
     </div>
   </div>
 {/if}

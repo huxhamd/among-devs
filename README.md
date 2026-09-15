@@ -22,12 +22,12 @@ npm start
 
 The production server listens on port 3000. `PORT` overrides it. `/healthz` is available in production. SvelteKit and Socket.IO share the same origin and port, including during development. There are no external fonts, analytics, voice services or image requests.
 
-`npm run test:browser` runs the three-person browser flow against the production build using installed Edge. Set `BROWSER_CHANNEL=chrome` to use installed Chrome instead (PowerShell: `$env:BROWSER_CHANNEL='chrome'`). The browser test covers joining, movement, refresh/reconnect, voting, and returning to the lobby. `npm run format` formats the source.
+`npm run test:browser` runs browser flows against the production build using installed Edge. Set `BROWSER_CHANNEL=chrome` to use installed Chrome instead (PowerShell: `$env:BROWSER_CHANNEL='chrome'`). Tests cover joining, movement, all four mini-tasks, saved task progress after refresh, training, CI repair, voting, and returning to the lobby. `npm run format` formats the source.
 
 ## Sprint rules
 
 - The host starts with 3–10 connected people. A three-second role reveal identifies the one randomly assigned tester and every dev before play begins; the role reminder remains above the play area.
-- Devs visit all four office workstations and answer a short task. Every dev's tickets count, including those of people sent on training. Completing every ticket or voting out the tester wins the release.
+- Devs visit all four office workstations and complete a short mini-task. Every dev's tickets count, including those of people sent on training. Completing every ticket or voting out the tester wins the release.
 - The tester can pretend to work, press B anywhere to break CI (45-second cooldown), and press T to send a nearby colleague on training (30-second cooldown, starting after 25 seconds). Pressing E at the CI Control Console also breaks CI for the tester. An active colleague must press E at that console at the top of the central office to repair CI before tickets can continue. Restarting the server in the Server Cupboard is a separate, regular ticket.
 - Devs lose when the four-minute work clock expires. With 4–10 people, the tester also wins when only one active dev remains. With three, the tester's direct training action is disabled so one click cannot decide the round.
 - WASD or arrow keys move. E opens a nearby task or repairs broken CI at the CI Control Console. Doorways connect rooms through the central office.
@@ -90,7 +90,11 @@ $env:IMAGE_TAG = git rev-parse HEAD
 
 ## Scope and tradeoffs
 
-This is an initial playable prototype. Tasks are intentionally simple multiple-choice interactions; they need team playtesting for difficulty and pacing. The client shows a short reading delay, but this is not an anti-cheat control. The server validates roles, phases, proximity, movement speed, cooldowns and votes. Only your own role and tasks are sent to your browser. Workspace attempts and actions are rate limited, payload size is capped, and cross-origin browser socket connections are rejected. These limits are lightweight abuse controls, not a public-service security boundary.
+This is a playable prototype. Development has an ordered merge runbook, Product has acceptance-criteria matching, and the Server Cupboard and Kitchen have configuration panels. Each station has two variants, assigned independently per player and sprint, with shuffled controls. Four accepted steps close each ticket; mistakes require correction without erasing accepted work. Progress survives closing the panel, standups, CI outages, and reconnects. Testers can complete the same interactions for cover, without advancing release progress. CI repair remains an immediate console action.
+
+The server validates each task instance and step, roles, phases, proximity, movement speed, cooldowns and votes. There is no artificial reading delay or minimum completion time. Only your own role and tasks are sent to your browser. Workspace attempts and actions are rate limited, payload size is capped, and cross-origin browser socket connections are rejected. These limits are lightweight abuse controls, not a public-service security boundary.
+
+For pacing playtests, each tab keeps per-station counters in session storage under `among-devs-task-metrics`: visible, connected task time (`activeMs`), submission attempts, incorrect submissions (`failures`), and completions. Inspect these with browser developer tools; clear that key and refresh to begin a fresh sample. Counters include tester cover tasks and partial attempts, so use completed samples when estimating task duration. They contain no names, roles or answers and are never sent to a service. Aim for roughly 10–25 seconds per task and tune after team playtesting.
 
 Lobbies live in memory. A restart, deployment or scale-to-zero loses the session; no database or Redis is needed. Do not increase the replica count without implementing shared session ownership and Socket.IO coordination. Revisions can briefly overlap during deployments, so deploy between sessions.
 
@@ -98,4 +102,4 @@ Private lobby codes control entry, but the Azure endpoint is public and codes ar
 
 Movement is rendered from a short client-side snapshot buffer for smooth motion while positions and interactions remain server-authoritative. Hidden player coordinates are still discarded immediately.
 
-Suggested next iteration: real mini-tasks and a few rounds of balancing with your team. Mobile controls, accounts, persistent sessions, and built-in audio/video are outside this first version.
+Suggested next iteration: a few rounds of balancing with your team, then additional task variants based on observed completion times. Mobile controls, accounts, persistent sessions, and built-in audio/video are outside this first version.

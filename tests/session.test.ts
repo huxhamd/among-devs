@@ -10,6 +10,22 @@ function setup(count = 4) {
   room.tick(4000);
   return room;
 }
+function taskAction(person: Session['players'][number], station: string, answer?: string) {
+  const puzzle = person.puzzles[station];
+  return {
+    type: 'task' as const,
+    station,
+    puzzle: puzzle.id,
+    step: puzzle.step,
+    answer:
+      answer ??
+      puzzle.definition.steps[Math.min(puzzle.step, puzzle.definition.steps.length - 1)].answer
+  };
+}
+function finishTask(room: Session, person: Session['players'][number], station: string) {
+  while (!person.completed.includes(station))
+    room.action(person.id, taskAction(person, station), 30000);
+}
 test('lobbies enforce minimum, maximum, unique names and host control', () => {
   const room = new Session('ABC234');
   const host = room.join('Host', 'one');
@@ -60,21 +76,12 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   const room = setup();
   const tester = room.players.find((p) => p.role === 'tester')!;
   const dev = room.players.find((p) => p.role === 'dev')!;
-  assert.throws(
-    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000),
-    /closer/
-  );
+  assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /closer/);
   dev.x = 160;
   dev.y = 130;
-  assert.throws(
-    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'ours' }, 30000),
-    /refinement/
-  );
+  assert.throws(() => room.action(dev.id, taskAction(dev, 'merge', 'wrong'), 30000), /refinement/);
   room.action(tester.id, { type: 'sabotage' }, 30000);
-  assert.throws(
-    () => room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000),
-    /Repair/
-  );
+  assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /Repair/);
   dev.x = 840;
   assert.throws(() => room.action(dev.id, { type: 'repair' }, 30000), /CI Control Console/);
   assert.equal(room.incident, true);
@@ -93,19 +100,15 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   }
   tester.x = 160;
   tester.y = 130;
-  room.action(tester.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);
+  finishTask(room, tester, 'merge');
   assert.equal(room.snapshot(dev.id).progress, 0);
   for (const person of room.players.filter((p) => p.role === 'dev'))
     for (const station of STATIONS) {
       person.x = station.x;
       person.y = station.y;
-      room.action(person.id, { type: 'task', station: station.id, answer: station.answer }, 30000);
+      finishTask(room, person, station.id);
       if (room.phase !== 'ended')
-        room.action(
-          person.id,
-          { type: 'task', station: station.id, answer: station.answer },
-          30000
-        );
+        room.action(person.id, { ...taskAction(person, station.id), step: 0 }, 30000);
     }
   assert.equal(room.winner, 'dev');
   assert.equal(room.snapshot(dev.id).progress, 12);
@@ -226,9 +229,54 @@ test('training requires the tester and cooldown; trainees can still work', () =>
   assert.throws(() => room.action(dev.id, { type: 'meeting' }, 30000), /training/);
   dev.x = 160;
   dev.y = 130;
-  room.action(dev.id, { type: 'task', station: 'merge', answer: 'both' }, 30000);
+  finishTask(room, dev, 'merge');
   assert.equal(dev.completed.length, 1);
 });
+test('task steps reject forged instances and out-of-order steps, persist, and stay private', () => {
+  const room = setup();
+  const [person, other] = room.players;
+  person.x = 160;
+  person.y = 130;
+  const first = taskAction(person, 'merge');
+  assert.throws(
+    () => room.action(person.id, { ...first, puzzle: other.puzzles.merge.id }, 30000),
+    /Reopen/
+  );
+  assert.throws(() => room.action(person.id, { ...first, step: 2 }, 30000), /current step/);
+  assert.throws(() => room.action(person.id, { ...first, step: NaN }, 30000), /Reopen/);
+  assert.throws(() => room.action(person.id, { ...first, answer: 'wrong' }, 30000), /refinement/);
+  assert.equal(person.puzzles.merge.step, 0);
+  room.action(person.id, first, 30000);
+  room.action(person.id, first, 30000);
+  assert.equal(person.puzzles.merge.step, 1);
+  assert.equal(person.completed.length, 0);
+  const snapshot = room.snapshot(person.id);
+  assert.equal(snapshot.puzzles.merge.step, 1);
+  assert.equal('answer' in snapshot.puzzles.merge.steps[0], false);
+  assert.ok(!JSON.stringify(snapshot).includes(other.puzzles.merge.id));
+  room.disconnect(person.socket!, 31000);
+  room.join(person.name, 'resumed', person.token, 32000);
+  assert.equal(room.snapshot(person.id).puzzles.merge.step, 1);
+  room.incident = true;
+  assert.throws(() => room.action(person.id, taskAction(person, 'merge'), 33000), /Repair/);
+  room.incident = false;
+  other.x = 500;
+  other.y = 310;
+  room.action(other.id, { type: 'meeting' }, 34000);
+  assert.throws(() => room.action(person.id, taskAction(person, 'merge'), 35000), /resumes/);
+  room.tick(74000);
+  room.tick(77000);
+  assert.equal(person.puzzles.merge.step, 1);
+  finishTask(room, person, 'merge');
+  assert.equal(person.completed.length, 1);
+  const oldId = person.puzzles.merge.id;
+  room.end('dev', 'test');
+  room.action(room.host, { type: 'reset' }, 80000);
+  assert.deepEqual(person.puzzles, {});
+  room.action(room.host, { type: 'start' }, 81000);
+  assert.notEqual(person.puzzles.merge.id, oldId);
+});
+
 test('reconnect restores a seat and disconnected host transfers ownership', () => {
   const room = setup();
   const oldHost = room.players[0];

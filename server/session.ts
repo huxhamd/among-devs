@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
 import {
   COLORS,
   STATIONS,
@@ -18,6 +19,10 @@ type Member = Omit<Person, 'visible'> & {
   socket: string | null;
   role: Role;
   tasks: string[];
+  puzzles: Record<
+    string,
+    { id: string; definition: TaskDefinition; step: number; order: number[] }
+  >;
   completed: string[];
   cooldown: number;
   lastMove: number;
@@ -84,6 +89,7 @@ export class Session {
       reported: false,
       role: 'dev',
       tasks: [],
+      puzzles: {},
       completed: [],
       cooldown: 0,
       lastMove: now,
@@ -114,6 +120,20 @@ export class Session {
       p.reported = false;
       p.notice = null;
       p.tasks = STATIONS.map((s) => s.id);
+      p.puzzles = Object.fromEntries(
+        STATIONS.map((station) => {
+          const variants = TASK_VARIANTS[station.id];
+          const order = [0, 1, 2, 3];
+          for (let j = order.length - 1; j > 0; j--) {
+            const k = randomInt(j + 1);
+            [order[j], order[k]] = [order[k], order[j]];
+          }
+          return [
+            station.id,
+            { id: randomUUID(), definition: variants[randomInt(variants.length)], step: 0, order }
+          ];
+        })
+      );
       p.completed = [];
       p.cooldown = now + ROLE_REVEAL_DURATION + 25_000;
       p.meetings = 1;
@@ -173,6 +193,7 @@ export class Session {
           p.reported = false;
           p.role = 'dev';
           p.tasks = [];
+          p.puzzles = {};
           p.completed = [];
         });
         this.result = '';
@@ -215,10 +236,19 @@ export class Session {
         throw new Error(
           'Repair CI at the CI Control Console at the top of the central office first.'
         );
-      if (station.answer !== action.answer)
+      const puzzle = p.puzzles[station.id];
+      if (!puzzle || action.puzzle !== puzzle.id || !Number.isInteger(action.step))
+        throw new Error('Reopen this ticket to load its current task.');
+      // Retrying an acknowledged step is harmless; it never advances a second time.
+      if (action.step < puzzle.step) return;
+      if (action.step !== puzzle.step || puzzle.step >= puzzle.definition.steps.length)
+        throw new Error('Wait for the current step.');
+      if (puzzle.definition.steps[puzzle.step].answer !== action.answer)
         throw new Error('That might need another refinement session. Try again.');
+      puzzle.step++;
       // Testers can convincingly pretend to work, but never advance team progress.
-      if (!p.completed.includes(station.id)) p.completed.push(station.id);
+      if (puzzle.step === puzzle.definition.steps.length && !p.completed.includes(station.id))
+        p.completed.push(station.id);
       this.checkWin();
       return;
     }
@@ -386,6 +416,12 @@ export class Session {
       }),
       role: this.phase === 'lobby' ? null : me.role,
       tasks: me.tasks,
+      puzzles: Object.fromEntries(
+        Object.entries(me.puzzles).map(([station, puzzle]) => [
+          station,
+          taskView(puzzle.definition, puzzle.id, puzzle.step, puzzle.order)
+        ])
+      ),
       completed: me.completed,
       progress: devs.reduce((n, p) => n + p.completed.length, 0),
       total: devs.reduce((n, p) => n + p.tasks.length, 0),
