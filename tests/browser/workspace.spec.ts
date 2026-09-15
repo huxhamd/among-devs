@@ -80,6 +80,7 @@ test('the tester can send a nearby colleague on training with T when ready', asy
 test('three colleagues join, move, vote, reconnect and return to the lobby', async ({
   browser
 }) => {
+  test.setTimeout(90_000);
   const contexts = await Promise.all([0, 1, 2].map(() => browser.newContext()));
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   const errors: string[] = [];
@@ -169,6 +170,57 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     ).toBeVisible();
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
+    const repairDialog = repairPage.getByRole('dialog', { name: 'Repair CI', exact: true });
+    await expect(repairDialog.locator('.task-progress')).toHaveText('0 of 3 steps saved');
+    await repairDialog.getByRole('button', { name: 'Running', exact: true }).click();
+    await repairDialog.getByRole('button', { name: 'Apply setting' }).click();
+    await expect(repairDialog.getByRole('alert')).toContainText('setting will not restore CI');
+    for (const [index, setting] of ['Paused', 'Cleared', 'Run'].entries()) {
+      const workerDialog =
+        index === 0
+          ? repairDialog
+          : testerPage.getByRole('dialog', { name: 'Repair CI', exact: true });
+      await workerDialog.getByRole('button', { name: setting, exact: true }).click();
+      await workerDialog.getByRole('button', { name: 'Apply setting' }).click();
+      if (index < 2) {
+        await expect(repairDialog.locator('.task-progress')).toHaveText(
+          `${index + 1} of 3 steps saved`
+        );
+        for (const page of pages)
+          await expect(page.locator('.ci-banner .outage')).toContainText(
+            `${index + 1}/3 repair steps saved`
+          );
+      }
+      if (index === 0) {
+        await repairPage.screenshot({ path: 'test-results/ci-repair.png', fullPage: true });
+        await repairPage.keyboard.press('Escape');
+        await expect(repairDialog).toBeHidden();
+        await repairPage.getByRole('button', { name: 'Repair CI · E', exact: true }).click();
+        await expect(repairDialog.locator('.task-progress')).toHaveText('1 of 3 steps saved');
+        await repairPage.reload();
+        await expect(
+          repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+        ).toBeVisible();
+        await repairPage.keyboard.press('e');
+        await expect(repairDialog.locator('.task-progress')).toHaveText('1 of 3 steps saved');
+        await testerPage.keyboard.down('w');
+        try {
+          await expect(
+            testerPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+          ).toBeVisible();
+        } finally {
+          await testerPage.keyboard.up('w');
+        }
+        await testerPage.keyboard.press('e');
+        await expect(
+          testerPage
+            .getByRole('dialog', { name: 'Repair CI', exact: true })
+            .locator('.task-progress')
+        ).toHaveText('1 of 3 steps saved');
+      }
+    }
+    await expect(repairDialog).toBeHidden();
+    await expect(testerPage.getByRole('dialog', { name: 'Repair CI', exact: true })).toBeHidden();
     for (const page of pages)
       await expect(
         page.locator('.map-panel').getByText('CI operational', { exact: true })

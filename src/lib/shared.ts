@@ -113,6 +113,7 @@ export type Snapshot = {
   cooldown: number;
   sabotageReady: number;
   incident: boolean;
+  repair: TaskView | null;
   meetingsLeft: number;
   meeting: { caller: string; deadline: number; votes: string[]; yourVote: string | null } | null;
   meetingResult: {
@@ -125,7 +126,8 @@ export type Snapshot = {
   winner: Role | null;
 };
 export type Action =
-  | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'repair' | 'report' }
+  | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'report' }
+  | { type: 'repair'; puzzle: string; step: number; answer: string }
   | { type: 'move'; dx: number; dy: number }
   | { type: 'sideline'; target: string }
   | { type: 'task'; station: string; puzzle: string; step: number; answer: string }

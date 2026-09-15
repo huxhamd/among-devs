@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
+import { CI_REPAIR, TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
 import {
   COLORS,
   STATIONS,
@@ -38,6 +38,7 @@ export class Session {
   roleRevealDeadline = 0;
   deadline = 0;
   incident = false;
+  repair: { id: string; step: number } | null = null;
   sabotageReady = 0;
   meeting: {
     caller: string;
@@ -145,6 +146,7 @@ export class Session {
     this.roleRevealDeadline = now + ROLE_REVEAL_DURATION;
     this.deadline = this.roleRevealDeadline + SPRINT_DURATION;
     this.incident = false;
+    this.repair = null;
     this.sabotageReady = this.roleRevealDeadline + 20_000;
     this.meeting = null;
     this.meetingResult = null;
@@ -199,6 +201,7 @@ export class Session {
         this.result = '';
         this.winner = null;
         this.incident = false;
+        this.repair = null;
         this.meetingResult = null;
         return;
       }
@@ -276,6 +279,7 @@ export class Session {
       if (p.role !== 'tester' || this.incident || now < this.sabotageReady)
         throw new Error('The pipeline is not ready for another incident.');
       this.incident = true;
+      this.repair = { id: randomUUID(), step: 0 };
       this.sabotageReady = now + 45_000;
       return;
     }
@@ -285,7 +289,23 @@ export class Session {
         throw new Error(
           'Move to the CI Control Console at the top of the central office to repair CI.'
         );
-      this.incident = false;
+      const repair = this.repair;
+      if (
+        !repair ||
+        action.puzzle !== repair.id ||
+        !Number.isInteger(action.step) ||
+        action.step < 0
+      )
+        throw new Error('Reopen CI repair to load the current incident.');
+      if (action.step < repair.step) return;
+      if (action.step !== repair.step) throw new Error('Wait for the current repair step.');
+      if (CI_REPAIR.steps[repair.step].answer !== action.answer)
+        throw new Error('That setting will not restore CI. Try again.');
+      repair.step++;
+      if (repair.step === CI_REPAIR.steps.length) {
+        this.incident = false;
+        this.repair = null;
+      }
       return;
     }
     if (action.type === 'meeting' || action.type === 'report') {
@@ -431,6 +451,7 @@ export class Session {
       cooldown: me.cooldown,
       sabotageReady: this.sabotageReady,
       incident: this.incident,
+      repair: this.repair ? taskView(CI_REPAIR, this.repair.id, this.repair.step, [1, 0]) : null,
       meetingsLeft: me.meetings,
       meeting: this.meeting
         ? {

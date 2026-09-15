@@ -35,6 +35,14 @@ const matching = (title: string, rows: [string, string][]): TaskDefinition => ({
   steps: rows.map(([label, answer]) => ({ label, answer, options: rows.map((row) => row[1]) }))
 });
 
+export const CI_REPAIR = repair('Restore the shared pipeline', [
+  ['Failing pipeline', 'Paused', ['Running', 'Paused']],
+  ['Bad deployment', 'Cleared', ['Retained', 'Cleared']],
+  ['Health check', 'Run', ['Skip', 'Run']]
+]);
+CI_REPAIR.instructions =
+  'Pause the pipeline, clear the bad deployment, then run its health check. Any active colleague can continue these shared steps.';
+
 export const TASK_VARIANTS: Record<string, TaskDefinition[]> = {
   merge: [
     sequence('Merge the profile changes', [

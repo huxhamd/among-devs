@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session } from '../server/session.ts';
 import { CI_CONSOLE, STATIONS } from '../src/lib/shared.ts';
+import { CI_REPAIR } from '../src/lib/tasks.ts';
 
 function setup(count = 4) {
   const room = new Session('ABC234');
@@ -25,6 +26,18 @@ function taskAction(person: Session['players'][number], station: string, answer?
 function finishTask(room: Session, person: Session['players'][number], station: string) {
   while (!person.completed.includes(station))
     room.action(person.id, taskAction(person, station), 30000);
+}
+function repairAction(room: Session) {
+  const repair = room.repair!;
+  return {
+    type: 'repair' as const,
+    puzzle: repair.id,
+    step: repair.step,
+    answer: CI_REPAIR.steps[repair.step].answer
+  };
+}
+function finishRepair(room: Session, id: string, now: number) {
+  while (room.incident) room.action(id, repairAction(room), now);
 }
 test('lobbies enforce minimum, maximum, unique names and host control', () => {
   const room = new Session('ABC234');
@@ -83,11 +96,11 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   room.action(tester.id, { type: 'sabotage' }, 30000);
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /Repair/);
   dev.x = 840;
-  assert.throws(() => room.action(dev.id, { type: 'repair' }, 30000), /CI Control Console/);
+  assert.throws(() => room.action(dev.id, repairAction(room), 30000), /CI Control Console/);
   assert.equal(room.incident, true);
   dev.x = CI_CONSOLE.x;
   dev.y = CI_CONSOLE.y + 60;
-  room.action(dev.id, { type: 'repair' }, 30000);
+  finishRepair(room, dev.id, 30000);
   assert.equal(room.incident, false);
 
   for (const [index, edge] of [-1, 1].entries()) {
@@ -95,7 +108,7 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
     room.action(tester.id, { type: 'sabotage' }, now);
     dev.x = CI_CONSOLE.x + edge * (CI_CONSOLE.width / 2);
     dev.y = CI_CONSOLE.y + 60;
-    room.action(dev.id, { type: 'repair' }, now);
+    finishRepair(room, dev.id, now);
     assert.equal(room.incident, false);
   }
   tester.x = 160;
@@ -113,6 +126,59 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   assert.equal(room.winner, 'dev');
   assert.equal(room.snapshot(dev.id).progress, 12);
 });
+test('CI repair is shared by active devs and testers, rejects stale steps, and never closes tickets', () => {
+  const room = setup(5);
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  const devs = room.players.filter((p) => p.role === 'dev');
+  for (const person of room.players) {
+    person.x = CI_CONSOLE.x;
+    person.y = CI_CONSOLE.y + 60;
+  }
+  room.action(tester.id, { type: 'sabotage' }, 30000);
+  const first = repairAction(room);
+  assert.throws(() => room.action(devs[0].id, { ...first, answer: 'wrong' }, 30000), /setting/);
+  assert.throws(() => room.action(devs[0].id, { ...first, step: 2 }, 30000), /current/);
+  assert.throws(() => room.action(devs[0].id, { ...first, step: -1 }, 30000), /Reopen/);
+  room.action(devs[0].id, first, 30000);
+  room.action(tester.id, first, 30000); // Same step, submitted concurrently.
+  assert.equal(room.repair?.step, 1);
+  assert.equal(room.incident, true);
+  assert.deepEqual(room.snapshot(devs[1].id).repair, room.snapshot(tester.id).repair);
+  assert.equal('answer' in room.snapshot(tester.id).repair!.steps[0], false);
+  room.action(tester.id, { type: 'sideline', target: devs[0].id }, 31000);
+  assert.throws(() => room.action(devs[0].id, repairAction(room), 31000), /training/);
+  room.action(devs[1].id, { type: 'report' }, 32000);
+  assert.throws(() => room.action(tester.id, repairAction(room), 33000), /resumes/);
+  room.tick(72000);
+  room.tick(75000);
+  assert.equal(room.repair?.step, 1);
+  room.disconnect(tester.socket!, 76000);
+  room.join(tester.name, 'resumed-tester', tester.token, 77000);
+  room.action(tester.id, repairAction(room), 78000);
+  assert.equal(room.repair?.step, 2);
+  assert.equal(room.incident, true);
+  const final = repairAction(room);
+  room.action(devs[1].id, final, 79000);
+  assert.equal(room.incident, false);
+  assert.equal(room.snapshot(tester.id).repair, null);
+  assert.equal(room.snapshot(tester.id).progress, 0);
+  assert.ok(room.players.every((p) => p.completed.length === 0));
+  assert.throws(() => room.action(tester.id, { type: 'sabotage' }, 80000), /not ready/);
+  room.action(tester.id, { type: 'sabotage' }, room.sabotageReady);
+  assert.notEqual(room.repair?.id, first.puzzle);
+  assert.equal(room.repair?.step, 0);
+  assert.throws(() => room.action(devs[1].id, final, room.sabotageReady), /Reopen/);
+  assert.throws(
+    () => room.action(tester.id, { type: 'sabotage' }, room.sabotageReady),
+    /not ready/
+  );
+  finishRepair(room, tester.id, room.sabotageReady);
+  assert.equal(room.incident, false);
+  room.end('dev', 'test');
+  room.action(room.host, { type: 'reset' });
+  assert.equal(room.repair, null);
+});
+
 test('a successful vote shows a synchronized result before ending the sprint', () => {
   const room = setup();
   const caller = room.players[0];

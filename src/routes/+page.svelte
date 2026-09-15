@@ -58,7 +58,13 @@
   let noticeRemaining = 0;
   let saved: { name: string; code: string; token: string } | null = null;
   let me = $derived(session?.players.find((p) => p.id === session?.self));
-  let station = $derived(STATIONS.find((s) => s.id === stationId));
+  let repairing = $derived(stationId === 'ci');
+  let station = $derived(
+    repairing
+      ? { id: 'ci', name: 'Repair CI', room: 'CI Control Console' }
+      : STATIONS.find((s) => s.id === stationId)
+  );
+  let currentPuzzle = $derived(repairing ? session?.repair : session?.puzzles[stationId]);
   let nearby = $derived(
     me ? STATIONS.find((s) => Math.hypot(s.x - me.x, s.y - me.y) <= 80) : undefined
   );
@@ -192,13 +198,10 @@
     socket.timeout(5000).emit('action', action, (timeout: Error | null, reply: Reply) => {
       if (timeout || reply.error)
         error = timeout ? 'Connection interrupted. Try again.' : reply.error!;
-      else if (action.type === 'repair') {
-        showNotice('CI restored. Tickets are available again.');
-      }
     });
   }
   function submitTask(answer: string) {
-    const puzzle = session?.puzzles[stationId];
+    const puzzle = currentPuzzle;
     if (!puzzle || taskPending || !connected) return;
     taskPending = true;
     taskError = '';
@@ -208,21 +211,31 @@
       .timeout(5000)
       .emit(
         'action',
-        {
-          type: 'task',
-          station: stationId,
-          puzzle: puzzle.id,
-          step: puzzle.step,
-          answer
-        } satisfies Action,
+        (repairing
+          ? { type: 'repair', puzzle: puzzle.id, step: puzzle.step, answer }
+          : {
+              type: 'task',
+              station: stationId,
+              puzzle: puzzle.id,
+              step: puzzle.step,
+              answer
+            }) satisfies Action,
         (timeout: Error | null, reply: Reply) => {
           taskPending = false;
-          if (timeout || reply.error)
+          if ((timeout || reply.error) && stationId === submittedStation)
             taskError = timeout ? 'Connection interrupted. Retry this step.' : reply.error!;
-          if (reply?.error?.includes('refinement')) metric(submittedStation).failures++;
+          if (reply?.error?.includes('refinement') || reply?.error?.includes('setting will not'))
+            metric(submittedStation).failures++;
           saveTaskMetrics();
         }
       );
+  }
+  function openRepair() {
+    if (!connected || session?.phase !== 'work' || !session.repair || !me?.active || !atConsole)
+      return;
+    stationId = 'ci';
+    taskError = '';
+    keys.clear();
   }
   function openTask() {
     if (session?.incident) {
@@ -289,7 +302,7 @@
   onMount(() => {
     try {
       const stored = JSON.parse(sessionStorage.getItem('among-devs-task-metrics') || '{}');
-      for (const station of STATIONS) {
+      for (const station of [...STATIONS, { id: 'ci' }]) {
         const value = stored[station.id];
         if (
           value &&
@@ -338,7 +351,16 @@
         movement.reset();
         renderedPositions = {};
       }
+      const ciRestored = session?.incident && !next.incident && next.phase === 'work';
       session = next;
+      if (repairing && (!next.repair || !next.players.find((p) => p.id === next.self)?.active)) {
+        if (ciRestored) {
+          metric('ci').completions++;
+          saveTaskMetrics();
+          showNotice('CI restored. Tickets are available again.');
+        }
+        stationId = '';
+      }
       if (stationId && next.completed.includes(stationId)) {
         metric(stationId).completions++;
         saveTaskMetrics();
@@ -415,7 +437,7 @@
         if (report && me?.active) {
           act({ type: 'report' });
         } else if (atConsole) {
-          if (session.incident && me?.active) act({ type: 'repair' });
+          if (session.incident && me?.active) openRepair();
           else if (session.incident)
             showNotice('An active colleague must repair CI.', GUIDANCE_DURATION);
           else if (session.role === 'tester' && me?.active) {
@@ -450,7 +472,7 @@
         connected &&
         session?.phase === 'work' &&
         stationId &&
-        !session.incident &&
+        (!session.incident || repairing) &&
         !document.hidden
       ) {
         metric(stationId).activeMs += Math.min(100, now - lastTaskTick);
@@ -725,7 +747,7 @@
           >
             <span class="ci-banner-icon" aria-hidden="true">!</span>
             <div class="ci-banner-copy">
-              <strong>CI is down</strong><span
+              <strong>CI is down · {session.repair?.step ?? 0}/3 repair steps saved</strong><span
                 >Go to the CI Control Console at the top of the central office and press E to repair
                 CI. An active colleague must restore CI before tickets can continue.</span
               >
@@ -1087,7 +1109,7 @@
                   >{:else if atConsole && session.incident}<button
                     class="primary wide"
                     disabled={!me?.active}
-                    onclick={() => act({ type: 'repair' })}
+                    onclick={openRepair}
                     >{me?.active ? 'Repair CI · E' : 'Active colleague required'}</button
                   >{/if}{#if nearby && !report}<button
                     class="primary wide"
@@ -1231,17 +1253,20 @@
       <button class="close quiet" onclick={() => (stationId = '')} aria-label="Close ticket"
         >×</button
       >
-      <div class="eyebrow">{station.room} · TICKET IN PROGRESS</div>
+      <div class="eyebrow">
+        {station.room} · {repairing ? 'SHARED INCIDENT' : 'TICKET IN PROGRESS'}
+      </div>
       <h2>{station.name}</h2>
-      {#if session.puzzles[station.id]}
+      {#if currentPuzzle}
         <MiniTask
-          puzzle={session.puzzles[station.id]}
-          disabled={taskPending || session.incident || !connected}
+          puzzle={currentPuzzle}
+          shared={repairing}
+          disabled={taskPending || (session.incident && !repairing) || !connected}
           submit={submitTask}
         />
       {/if}
       {#if taskError}<p role="alert">{taskError}</p>{/if}
-      {#if session.incident}<p role="status">
+      {#if session.incident && !repairing}<p role="status">
           CI is down. Press Esc and go to the CI Control Console to repair it. Your accepted steps
           are saved.
         </p>{/if}
@@ -1275,7 +1300,9 @@
       <p>
         The tester can press <b>B</b> anywhere to break CI every 45 seconds and press <b>T</b> to
         send a nearby colleague on training every 30 seconds. To repair CI, go to the CI Control
-        Console at the top of the central office and press <b>E</b>. The tester can also press
+        Console at the top of the central office, press <b>E</b>, and complete the three shared
+        repair steps. Any active colleague, including the tester, can help; trainees cannot. Repairs
+        do not close tickets. The tester can also press
         <b>E</b> at that console to break CI. The Server Cupboard’s restart task is a separate ticket.
         With three people, the tester’s training action is disabled.
       </p>

@@ -3,8 +3,14 @@
   let {
     puzzle,
     disabled,
-    submit
-  }: { puzzle: TaskView; disabled: boolean; submit: (answer: string) => void } = $props();
+    submit,
+    shared = false
+  }: {
+    puzzle: TaskView;
+    disabled: boolean;
+    submit: (answer: string) => void;
+    shared?: boolean;
+  } = $props();
   let selection = $state('');
   let current = $derived(puzzle.steps[puzzle.step]);
   let stepIndex = $derived(puzzle.step);
@@ -18,7 +24,11 @@
   <h3>{puzzle.title}</h3>
   <p>{puzzle.instructions}</p>
   <div class="task-progress" role="status">{puzzle.step} of {puzzle.steps.length} steps saved</div>
-  <progress max={puzzle.steps.length} value={puzzle.step} aria-label="Ticket progress"></progress>
+  <progress
+    max={puzzle.steps.length}
+    value={puzzle.step}
+    aria-label={shared ? 'Shared repair progress' : 'Ticket progress'}
+  ></progress>
   {#if current}
     {#if puzzle.kind === 'sequence'}
       <ol class="runbook">
@@ -77,7 +87,11 @@
       </div>
     {/if}
   {/if}
-  <p class="muted">Accepted steps are saved. Esc closes this ticket.</p>
+  <p class="muted">
+    {shared
+      ? 'Progress is shared for this outage. Esc closes the repair panel.'
+      : 'Accepted steps are saved. Esc closes this ticket.'}
+  </p>
 </section>
 
 <style>
