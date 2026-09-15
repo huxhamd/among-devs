@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
+  import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
   import {
     CI_CONSOLE,
     STATIONS,
@@ -18,6 +19,7 @@
   let name = $state('');
   let code = $state('');
   let session = $state<Snapshot | null>(null);
+  let renderedPositions = $state<Record<string, InterpolatedPosition>>({});
   let connected = $state(false);
   let busy = $state(false);
   let error = $state('');
@@ -33,6 +35,7 @@
   const noticePauseReasons = new Set<'pointer' | 'focus'>();
   const NOTICE_DURATION = 4000;
   const GUIDANCE_DURATION = 8000;
+  const movement = new PositionInterpolator();
   let noticeId = 0;
   let noticeTimer: ReturnType<typeof setTimeout> | undefined;
   let noticeStartedAt = 0;
@@ -230,6 +233,8 @@
     saved = null;
     socket.disconnect();
     session = null;
+    movement.reset();
+    renderedPositions = {};
     busy = false;
     socket.connect();
   }
@@ -262,12 +267,23 @@
       connected = false;
       busy = false;
       keys.clear();
+      movement.reset();
+      renderedPositions = {};
     });
     socket.on('connect_error', () => {
       connected = false;
       error = 'Cannot connect to the workspace. Retrying…';
     });
     socket.on('state', (next: Snapshot) => {
+      const arrivalAt = performance.now();
+      if (next.phase === 'work') {
+        if (session?.phase !== 'work') movement.reset();
+        movement.addSnapshot(next.players, next.now, arrivalAt);
+        renderedPositions = movement.positions(arrivalAt);
+      } else {
+        movement.reset();
+        renderedPositions = {};
+      }
       session = next;
       if (next.phase !== 'work') {
         stationId = '';
@@ -359,6 +375,14 @@
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', clear);
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let animationFrame = 0;
+    const animateMovement = (now: number) => {
+      if (session?.phase === 'work')
+        renderedPositions = movement.positions(now, !motionPreference.matches);
+      animationFrame = requestAnimationFrame(animateMovement);
+    };
+    animationFrame = requestAnimationFrame(animateMovement);
     const timer = setInterval(() => {
       if (stationId) taskTime = Date.now() - taskStarted;
       if (!connected || session?.phase !== 'work' || stationId || help) return;
@@ -372,6 +396,7 @@
     }, 50);
     return () => {
       clearInterval(timer);
+      cancelAnimationFrame(animationFrame);
       clearTimeout(noticeTimer);
       socket.disconnect();
       window.removeEventListener('keydown', down);
@@ -874,10 +899,12 @@
                             : 'E — Open ticket'}</text
                       >{/if}</g
                   >{/each}
-                {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}<g
+                {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
+                  {@const position = renderedPositions[person.id] ?? person}
+                  <g
                     transition:fade={{ duration: 250 }}
                     style:opacity={!person.connected ? 0.35 : person.active ? 1 : 0.5}
-                    transform={`translate(${person.x},${person.y})`}
+                    transform={`translate(${position.x},${position.y})`}
                     ><ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
                       x="-15"
                       y="-20"
@@ -914,40 +941,40 @@
                       >{person.name}{person.id === session.self ? ' (you)' : ''}</text
                     >{#if report?.id === person.id}<rect
                         x="-105"
-                        y={person.y > 555 ? -74 : 34}
+                        y={position.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#c3b6ff"
                       /><text
-                        y={person.y > 555 ? -56 : 52}
+                        y={position.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">E — Report training notice</text
                       >{:else if trainingTarget?.id === person.id}<rect
                         x="-105"
-                        y={person.y > 555 ? -74 : 34}
+                        y={position.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#fda4af"
                       /><text
-                        y={person.y > 555 ? -56 : 52}
+                        y={position.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">T — Send Dev on training</text
                       >{:else if trainingCooldownTarget?.id === person.id}<rect
                         x="-105"
-                        y={person.y > 555 ? -74 : 34}
+                        y={position.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#83909e"
                       /><text
-                        y={person.y > 555 ? -56 : 52}
+                        y={position.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">Training ready in {cooldown}s</text

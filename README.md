@@ -96,4 +96,6 @@ Lobbies live in memory. A restart, deployment or scale-to-zero loses the session
 
 Private lobby codes control entry, but the Azure endpoint is public and codes are not corporate authentication. Keep codes within the team. UI copy uses office terms, but that does not guarantee acceptance by corporate filtering; use your workplace's approved access process. Original office visuals are drawn in SVG/CSS, with no Among Us assets.
 
-Suggested next iteration: real mini-tasks, better movement interpolation, and a few rounds of balancing with your team. Mobile controls, accounts, persistent sessions, and built-in audio/video are outside this first version.
+Movement is rendered from a short client-side snapshot buffer for smooth motion while positions and interactions remain server-authoritative. Hidden player coordinates are still discarded immediately.
+
+Suggested next iteration: real mini-tasks and a few rounds of balancing with your team. Mobile controls, accounts, persistent sessions, and built-in audio/video are outside this first version.
