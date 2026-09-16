@@ -14,6 +14,8 @@ export const COLORS = [
 ];
 export const WIDTH = 1000;
 export const HEIGHT = 620;
+// Keep the visual light boundary aligned with server-authoritative visibility.
+export const VISIBILITY_RADIUS = 240;
 // One continuous world; the camera shows exactly one office page at a time.
 export const PAGES = [
   { id: 'centre', name: 'The Open Plan', x: 0, y: 0, color: '#303744' },

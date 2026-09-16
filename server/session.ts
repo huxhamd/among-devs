@@ -1,8 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { canSee } from '../src/lib/visibility.ts';
 import { CI_REPAIR, TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
 import {
   COLORS,
   STATIONS,
+  VISIBILITY_RADIUS,
   atCiConsole,
   walkable,
   pageAt,
@@ -173,11 +175,7 @@ export class Session {
       this.end('tester', 'Too few devs remain. The release has been postponed indefinitely.');
   }
   nearby(a: { x: number; y: number }, b: { x: number; y: number }, distance = 80) {
-    if (pageAt(a)?.id !== pageAt(b)?.id) return false;
-    if (Math.hypot(a.x - b.x, a.y - b.y) > distance) return false;
-    for (let i = 1; i < 20; i++)
-      if (!walkable(a.x + ((b.x - a.x) * i) / 20, a.y + ((b.y - a.y) * i) / 20)) return false;
-    return true;
+    return canSee(a, b, distance);
   }
   action(id: string, action: Action, now = Date.now()) {
     const p = this.players.find((p) => p.id === id);
@@ -423,7 +421,10 @@ export class Session {
       players: this.players.map((p) => {
         const position = p.id !== id && p.notice ? p.notice : p;
         const visible =
-          this.phase !== 'work' || p.id === id || !me.active || this.nearby(me, position, 240);
+          this.phase !== 'work' ||
+          p.id === id ||
+          !me.active ||
+          this.nearby(me, position, VISIBILITY_RADIUS);
         return {
           id: p.id,
           name: p.name,

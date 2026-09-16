@@ -4,12 +4,14 @@
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
+  import { lightPolygon } from '$lib/visibility';
   import {
     CI_CONSOLE,
     STATIONS,
     WALLS,
     PAGES,
     EXITS,
+    VISIBILITY_RADIUS,
     pageAt,
     atCiConsole,
     nearestWithin,
@@ -62,6 +64,15 @@
   let saved: { name: string; code: string; token: string } | null = null;
   let me = $derived(session?.players.find((p) => p.id === session?.self));
   let currentPage = $derived((me && pageAt(renderedPositions[me.id] ?? me)) || PAGES[0]);
+  let lightPosition = $derived(me ? (renderedPositions[me.id] ?? me) : undefined);
+  let limitedVision = $derived(session?.phase === 'work' && me?.active);
+  let lightPoints = $derived(
+    limitedVision && lightPosition
+      ? lightPolygon(lightPosition)
+          .map((point) => `${point.x},${point.y}`)
+          .join(' ')
+      : ''
+  );
   let repairing = $derived(stationId === 'ci');
   let station = $derived(
     repairing
@@ -813,8 +824,53 @@
                       stroke="#2a303b"
                       stroke-width="1"
                     /></pattern
-                  ></defs
-                >
+                  >
+                  <radialGradient
+                    id="visibility-light"
+                    gradientUnits="userSpaceOnUse"
+                    cx={lightPosition?.x ?? 0}
+                    cy={lightPosition?.y ?? 0}
+                    r={VISIBILITY_RADIUS}
+                  >
+                    <stop offset="0%" stop-color="black" stop-opacity="1" />
+                    <stop offset="65%" stop-color="black" stop-opacity="1" />
+                    <stop offset="85%" stop-color="black" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="black" stop-opacity="0" />
+                  </radialGradient>
+                  <clipPath id="visibility-area" clipPathUnits="userSpaceOnUse">
+                    <polygon points={lightPoints} />
+                  </clipPath>
+                  <clipPath id="visibility-radius" clipPathUnits="userSpaceOnUse">
+                    <circle
+                      cx={lightPosition?.x ?? 0}
+                      cy={lightPosition?.y ?? 0}
+                      r={VISIBILITY_RADIUS}
+                    />
+                  </clipPath>
+                  <mask
+                    id="visibility-mask"
+                    maskUnits="userSpaceOnUse"
+                    x={currentPage.x}
+                    y={currentPage.y}
+                    width="1000"
+                    height="620"
+                    style="mask-type: luminance"
+                  >
+                    <rect
+                      x={currentPage.x}
+                      y={currentPage.y}
+                      width="1000"
+                      height="620"
+                      fill="white"
+                    />
+                    <polygon points={lightPoints} fill="url(#visibility-light)" />
+                  </mask>
+                  <radialGradient id="player-glow">
+                    <stop offset="0%" stop-color="#ffe4a3" stop-opacity="0.32" />
+                    <stop offset="40%" stop-color="#ffe4a3" stop-opacity="0.16" />
+                    <stop offset="100%" stop-color="#ffe4a3" stop-opacity="0" />
+                  </radialGradient>
+                </defs>
                 <rect
                   x={currentPage.x}
                   y={currentPage.y}
@@ -857,14 +913,6 @@
                     font-size="14">{label}</text
                   >
                 {/each}
-                {#each WALLS as wall}<rect
-                    x={wall.x}
-                    y={wall.y}
-                    width={wall.w}
-                    height={wall.h}
-                    fill="#535c69"
-                    rx="3"
-                  />{/each}
                 <text class="room-label" x={currentPage.x + 170} y={currentPage.y + 45}
                   >{currentPage.name.toUpperCase()}</text
                 >
@@ -1004,13 +1052,56 @@
                             : 'E — Open ticket'}</text
                       >{/if}</g
                   >{/each}
+                {#if limitedVision}
+                  <rect
+                    class="visibility-shade"
+                    x={currentPage.x}
+                    y={currentPage.y}
+                    width="1000"
+                    height="620"
+                    fill="#080c14"
+                    opacity="0.62"
+                    mask="url(#visibility-mask)"
+                    pointer-events="none"
+                    aria-hidden="true"
+                  />
+                {/if}
+                <!-- Navigation geometry stays readable even beyond the light. -->
+                {#each WALLS as wall}<rect
+                    x={wall.x}
+                    y={wall.y}
+                    width={wall.w}
+                    height={wall.h}
+                    fill="#535c69"
+                    rx="3"
+                  />{/each}
                 {#each session.players.filter((p) => p.visible && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
                   {@const position = renderedPositions[person.id] ?? person}
                   <g
+                    class="map-player"
+                    data-player-id={person.id}
                     transition:fade={{ duration: 250 }}
                     style:opacity={!person.connected ? 0.35 : person.active ? 1 : 0.5}
                     transform={`translate(${position.x},${position.y})`}
-                    ><ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
+                    >{#if limitedVision && person.active}
+                      <!-- Shares the avatar's visibility and existing 250ms fade. -->
+                      <g
+                        transform={`translate(${-position.x},${-position.y})`}
+                        clip-path="url(#visibility-area)"
+                      >
+                        <circle
+                          class="player-glow"
+                          cx={position.x}
+                          cy={position.y}
+                          r={person.id === session.self ? 64 : 42}
+                          fill="url(#player-glow)"
+                          opacity={person.id === session.self ? 1 : 0.65}
+                          clip-path="url(#visibility-radius)"
+                          pointer-events="none"
+                          aria-hidden="true"
+                        />
+                      </g>
+                    {/if}<ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
                       x="-15"
                       y="-20"
                       width="30"
@@ -1086,6 +1177,11 @@
                       >{/if}</g
                   >{/each}
               </svg>
+              {#if limitedVision}
+                <div class="visibility-hint">
+                  Your light shows nearby colleagues. Walls block light and sight.
+                </div>
+              {/if}
               <div class="map-footer">
                 <span aria-live="polite"
                   >{currentPage.name} · {currentPage.id === 'centre'

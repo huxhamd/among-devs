@@ -744,6 +744,13 @@ footer > span:first-child {
   background: #1a2029;
   gap: 10px;
 }
+.visibility-hint {
+  padding: 9px 15px;
+  font-size: 11px;
+  color: #d3c5a5;
+  background: #1a2029;
+  border-bottom: 1px solid #ffffff0a;
+}
 kbd {
   font-size: 9px;
   padding: 2px 4px;
