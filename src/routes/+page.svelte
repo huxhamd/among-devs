@@ -834,6 +834,9 @@
                 {#each EXITS.filter((exit) => exit.from === currentPage.id) as exit}
                   {@const localX = exit.x - currentPage.x}
                   {@const localY = exit.y - currentPage.y}
+                  {@const label = exit.vertical ? exit.label.replace(/[←→]/u, '↑') : exit.label}
+                  {@const labelX = exit.vertical ? exit.x + (localX === 0 ? 35 : -35) : exit.x}
+                  {@const labelY = exit.vertical ? exit.y : exit.y + (localY === 0 ? 35 : -25)}
                   <rect
                     x={exit.x - (exit.vertical ? 14 : 55)}
                     y={exit.y - (exit.vertical ? 55 : 14)}
@@ -843,11 +846,15 @@
                     opacity=".25"
                   />
                   <text
-                    x={exit.vertical ? exit.x + (localX === 0 ? 80 : -80) : exit.x}
-                    y={exit.vertical ? exit.y - 85 : exit.y + (localY === 0 ? 35 : -25)}
+                    x={labelX}
+                    y={labelY}
+                    transform={exit.vertical
+                      ? `rotate(${localX === 0 ? -90 : 90} ${labelX} ${labelY})`
+                      : undefined}
                     text-anchor="middle"
+                    dominant-baseline={exit.vertical ? 'middle' : undefined}
                     fill="#9de7d7"
-                    font-size="14">{exit.label}</text
+                    font-size="14">{label}</text
                   >
                 {/each}
                 {#each WALLS as wall}<rect
