@@ -3,6 +3,12 @@ import { canSee } from '../src/lib/visibility.ts';
 import { CI_REPAIR, TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
 import {
   COLORS,
+  ACCESS_DURATION,
+  ACCESS_REACH,
+  ACCESS_PAIRS,
+  ACCESS_SPAWNS,
+  type AccessPanel,
+  type AccessUse,
   CUPBOARD_SPAWNS,
   CUPBOARD_DURATION,
   CUPBOARD_REACH,
@@ -24,6 +30,7 @@ const ROLE_REVEAL_DURATION = 3_000;
 const SPRINT_DURATION = 240_000;
 
 type Member = Omit<Person, 'visible'> & {
+  access: AccessUse | null;
   cupboard: CupboardUse | null;
   token: string;
   socket: string | null;
@@ -41,6 +48,7 @@ type Member = Omit<Person, 'visible'> & {
   notice: { x: number; y: number } | null;
 };
 export class Session {
+  accessPanels: AccessPanel[] = [];
   cupboards: Cupboard[] = [];
   code: string;
   host = '';
@@ -89,6 +97,7 @@ export class Session {
     if (this.players.some((p) => p.name.toLowerCase() === name.trim().toLowerCase()))
       throw new Error('That display name is already taken.');
     const p: Member = {
+      access: null,
       cupboard: null,
       id: randomUUID(),
       token: randomUUID(),
@@ -126,6 +135,10 @@ export class Session {
     if (this.players.length < 3 || this.players.some((p) => !p.connected))
       throw new Error('Start with 3–10 connected people.');
     this.initialCount = this.players.length;
+    this.accessPanels = ACCESS_PAIRS[randomInt(ACCESS_PAIRS.length)].map((id) => {
+      const spots = ACCESS_SPAWNS.filter((spot) => pageAt(spot)?.id === id);
+      return { ...spots[randomInt(spots.length)], open: false };
+    });
     const pages = [...PAGES];
     this.cupboards = Array.from({ length: 3 }, () => {
       const [page] = pages.splice(randomInt(pages.length), 1);
@@ -136,6 +149,7 @@ export class Session {
     this.players.forEach((p, i) => {
       p.role = i === tester ? 'tester' : 'dev';
       p.cupboard = null;
+      p.access = null;
       p.active = true;
       p.reported = false;
       p.notice = null;
@@ -173,6 +187,7 @@ export class Session {
     this.winner = null;
   }
   end(winner: Role, result: string) {
+    this.clearAccess();
     this.clearCupboards();
     this.phase = 'ended';
     this.roleRevealDeadline = 0;
@@ -201,6 +216,21 @@ export class Session {
       p.cupboard = null;
     }
   }
+  clearAccess() {
+    // Meetings interrupt travel at the source unless the exit has already begun.
+    for (const p of this.players) {
+      if (!p.access) continue;
+      const panel = this.accessPanels.find(
+        (a) => a.id === (p.access!.phase === 'exiting' ? p.access!.to : p.access!.from)
+      );
+      if (panel) {
+        p.x = panel.x;
+        p.y = panel.y;
+        panel.open = true;
+      }
+      p.access = null;
+    }
+  }
   action(id: string, action: Action, now = Date.now()) {
     const p = this.players.find((p) => p.id === id);
     if (!p || !p.connected) throw new Error('Reconnect to your workspace.');
@@ -214,6 +244,8 @@ export class Session {
         this.players = this.players.filter((p) => p.connected);
         this.phase = 'lobby';
         this.clearCupboards();
+        this.clearAccess();
+        this.accessPanels = [];
         this.cupboards = [];
         this.roleRevealDeadline = 0;
         this.players.forEach((p) => {
@@ -246,6 +278,13 @@ export class Session {
       return;
     }
     if (this.phase !== 'work') throw new Error('Wait until the sprint resumes.');
+    if (p.access) {
+      if (action.type === 'move') {
+        p.lastMove = now;
+        return;
+      }
+      throw new Error('Wait until you finish using the maintenance route.');
+    }
     if (action.type === 'cupboard') {
       if (p.role !== 'tester' || !p.active)
         throw new Error('Only the active Tester can use cupboards.');
@@ -272,6 +311,25 @@ export class Session {
         return;
       }
       throw new Error('Exit the supply cupboard first.');
+    }
+    if (action.type === 'access') {
+      if (p.role !== 'tester' || !p.active)
+        throw new Error('Only the active Tester can use access panels.');
+      const panel = this.accessPanels.find((a) => a.id === action.id);
+      if (!panel || !this.nearby(p, panel, ACCESS_REACH))
+        throw new Error('Move closer to that access panel.');
+      const destination = this.accessPanels.find((a) => a.id !== panel.id)!;
+      p.x = panel.x;
+      p.y = panel.y;
+      panel.open = true;
+      p.access = {
+        from: panel.id,
+        to: destination.id,
+        phase: 'entering',
+        deadline: now + ACCESS_DURATION
+      };
+      p.lastMove = now;
+      return;
     }
     if (action.type === 'move') {
       if (!Number.isFinite(action.dx) || !Number.isFinite(action.dy)) return;
@@ -374,6 +432,7 @@ export class Session {
       }
       this.players.filter((p) => !p.active).forEach((p) => (p.reported = true));
       this.phase = 'meeting';
+      this.clearAccess();
       this.clearCupboards();
       this.meeting = { caller: p.name, deadline: now + 40_000, started: now, votes: new Map() };
       return;
@@ -440,6 +499,24 @@ export class Session {
   tick(now = Date.now()) {
     if (this.phase === 'work') {
       for (const p of this.players) {
+        // Advance one phase per tick so a delayed server never skips a visible exit.
+        const use = p.access;
+        if (!use || now < use.deadline) continue;
+        const source = this.accessPanels.find((a) => a.id === use.from)!;
+        const destination = this.accessPanels.find((a) => a.id === use.to)!;
+        if (use.phase === 'entering') {
+          source.open = false;
+          p.access = { ...use, phase: 'travelling', deadline: now + ACCESS_DURATION };
+        } else if (use.phase === 'travelling') {
+          source.open = true;
+          destination.open = true;
+          p.x = destination.x;
+          p.y = destination.y;
+          p.access = { ...use, phase: 'exiting', deadline: now + ACCESS_DURATION };
+        } else p.access = null;
+        p.lastMove = now;
+      }
+      for (const p of this.players) {
         const use = p.cupboard;
         if (!use || use.phase === 'hidden' || now < use.deadline) continue;
         const cupboard = this.cupboards.find((c) => c.id === use.id)!;
@@ -481,17 +558,30 @@ export class Session {
   snapshot(id: string, now = Date.now()): Snapshot {
     const me = this.players.find((p) => p.id === id)!;
     const devs = this.players.filter((p) => p.role === 'dev');
+    const travelling = me.access?.phase === 'travelling';
     return {
+      access: me.access ? { ...me.access } : null,
+      accessPanels: this.accessPanels.map((a) => ({
+        ...a,
+        // Locations are map infrastructure and always known. Door activity is only
+        // disclosed while the viewer is on that panel's page.
+        open:
+          this.phase !== 'work' || pageAt(me)?.id === pageAt(a)?.id ? a.open : null
+      })),
       cupboard: me.cupboard ? { ...me.cupboard } : null,
       cupboards: this.cupboards.map((c) => ({
         ...c,
         open:
           this.phase !== 'work' ||
-          !me.active ||
+          (!travelling && !me.active) ||
           this.nearby(
             me,
             c,
-            me.cupboard?.phase === 'hidden' ? VISIBILITY_RADIUS / 2 : VISIBILITY_RADIUS
+            travelling
+              ? 0
+              : me.cupboard?.phase === 'hidden'
+                ? VISIBILITY_RADIUS / 2
+                : VISIBILITY_RADIUS
           )
             ? c.open
             : null
@@ -507,6 +597,8 @@ export class Session {
           this.phase !== 'work' ||
           p.id === id ||
           (p.cupboard?.phase !== 'hidden' &&
+            p.access?.phase !== 'travelling' &&
+            !travelling &&
             (!me.active ||
               this.nearby(
                 me,

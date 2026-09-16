@@ -18,6 +18,30 @@ export const HEIGHT = 620;
 export const VISIBILITY_RADIUS = 240;
 export const CUPBOARD_DURATION = 1000;
 export const CUPBOARD_REACH = 60;
+export const ACCESS_DURATION = 1000;
+export const ACCESS_REACH = 60;
+export const ACCESS_PAIRS = [
+  ['north', 'south'],
+  ['east', 'west']
+] as const;
+// Separate floor positions keep panels away from cupboard entrances.
+export const ACCESS_SPAWNS = [
+  { id: 'access-north-top', x: 400, y: -510 },
+  { id: 'access-north-bottom', x: 580, y: -80 },
+  { id: 'access-south-top', x: 700, y: 750 },
+  { id: 'access-south-bottom', x: 250, y: 1160 },
+  { id: 'access-east-top', x: 1150, y: 190 },
+  { id: 'access-east-bottom', x: 1820, y: 480 },
+  { id: 'access-west-top', x: -450, y: 80 },
+  { id: 'access-west-bottom', x: -850, y: 480 }
+] as const;
+export type AccessPanel = { id: string; x: number; y: number; open: boolean };
+export type AccessUse = {
+  from: string;
+  to: string;
+  phase: 'entering' | 'travelling' | 'exiting';
+  deadline: number;
+};
 // Coordinates mark the floor directly in front of each cupboard.
 export const CUPBOARD_SPAWNS = [
   { id: 'centre-left', x: 130, y: 130 },
@@ -195,6 +219,8 @@ export type Person = {
   visible: boolean;
 };
 export type Snapshot = {
+  accessPanels: (Omit<AccessPanel, 'open'> & { open: boolean | null })[];
+  access: AccessUse | null;
   cupboards: (Omit<Cupboard, 'open'> & { open: boolean | null })[];
   cupboard: CupboardUse | null;
   code: string;
@@ -227,6 +253,7 @@ export type Snapshot = {
   winner: Role | null;
 };
 export type Action =
+  | { type: 'access'; id: string }
   | { type: 'cupboard'; id: string }
   | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'report' }
   | { type: 'repair'; puzzle: string; step: number; answer: string }

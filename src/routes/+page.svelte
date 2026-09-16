@@ -8,6 +8,7 @@
   import {
     CI_CONSOLE,
     CUPBOARD_REACH,
+    ACCESS_REACH,
     STATIONS,
     WALLS,
     PAGES,
@@ -69,10 +70,32 @@
   let lightPosition = $derived(me ? (renderedPositions[me.id] ?? me) : undefined);
   let limitedVision = $derived(session?.phase === 'work' && me?.active);
   let cupboardUse = $derived(session?.cupboard);
+  let accessUse = $derived(session?.access);
+  let travelling = $derived(accessUse?.phase === 'travelling');
+  let interactionLocked = $derived(!!cupboardUse || !!accessUse);
+  let nearbyAccess = $derived(
+    session?.role === 'tester' && me?.active && !interactionLocked
+      ? session.accessPanels?.find((a) => canSee(me, a, ACCESS_REACH))
+      : undefined
+  );
+  let accessLabel = $derived(
+    accessUse
+      ? accessUse.phase === 'entering'
+        ? 'Entering access panel…'
+        : travelling
+          ? 'Travelling through maintenance route…'
+          : 'Exiting access panel…'
+      : 'Use access panel · E'
+  );
+  function useAccess() {
+    if (!nearbyAccess || interactionLocked) return;
+    keys.clear();
+    act({ type: 'access', id: nearbyAccess.id });
+  }
   let hidden = $derived(cupboardUse?.phase === 'hidden');
-  let visionRadius = $derived(hidden ? VISIBILITY_RADIUS / 2 : VISIBILITY_RADIUS);
+  let visionRadius = $derived(travelling ? 0 : hidden ? VISIBILITY_RADIUS / 2 : VISIBILITY_RADIUS);
   let nearbyCupboard = $derived(
-    session?.role === 'tester' && me?.active
+    session?.role === 'tester' && me?.active && !accessUse
       ? session.cupboards?.find((c) => canSee(me, c, CUPBOARD_REACH))
       : undefined
   );
@@ -104,16 +127,18 @@
   );
   let currentPuzzle = $derived(repairing ? session?.repair : session?.puzzles[stationId]);
   let nearby = $derived(
-    me && !cupboardUse
+    me && !interactionLocked
       ? STATIONS.find(
           (s) => pageAt(s)?.id === pageAt(me)?.id && Math.hypot(s.x - me.x, s.y - me.y) <= 80
         )
       : undefined
   );
-  let atTable = $derived(me && !cupboardUse ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
-  let atConsole = $derived(me && !cupboardUse ? atCiConsole(me) : false);
+  let atTable = $derived(
+    me && !interactionLocked ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false
+  );
+  let atConsole = $derived(me && !interactionLocked ? atCiConsole(me) : false);
   let target = $derived(
-    me && session && !cupboardUse
+    me && session && !interactionLocked
       ? nearestWithin(
           me,
           session.players.filter((p) => p.visible && p.active && p.id !== me.id),
@@ -122,7 +147,7 @@
       : undefined
   );
   let report = $derived(
-    session?.phase === 'work' && me?.active && !cupboardUse
+    session?.phase === 'work' && me?.active && !interactionLocked
       ? session.players.find(
           (p) =>
             p.visible && !p.active && !p.reported && me && Math.hypot(p.x - me.x, p.y - me.y) <= 80
@@ -384,7 +409,15 @@
     socket.on('state', (next: Snapshot) => {
       const arrivalAt = performance.now();
       if (next.phase === 'work') {
-        if (session?.phase !== 'work') movement.reset();
+        const previousSelf = session?.players.find((p) => p.id === next.self);
+        const nextSelf = next.players.find((p) => p.id === next.self);
+        if (
+          session?.phase !== 'work' ||
+          (previousSelf &&
+            nextSelf &&
+            Math.hypot(nextSelf.x - previousSelf.x, nextSelf.y - previousSelf.y) > 100)
+        )
+          movement.reset();
         movement.addSnapshot(next.players, next.now, arrivalAt);
         renderedPositions = movement.positions(arrivalAt);
       } else {
@@ -450,7 +483,7 @@
         !stationId &&
         !help &&
         session.role === 'tester' &&
-        !cupboardUse &&
+        !interactionLocked &&
         me?.active &&
         !session.incident &&
         sabotageCooldown === 0
@@ -482,7 +515,10 @@
         !stationId &&
         !help
       ) {
-        if (cupboardUse || nearbyCupboard) {
+        if (accessUse || nearbyAccess) {
+          event.preventDefault();
+          useAccess();
+        } else if (cupboardUse || nearbyCupboard) {
           event.preventDefault();
           useCupboard();
         } else if (report && me?.active) {
@@ -530,7 +566,7 @@
         saveTaskMetrics();
       }
       lastTaskTick = now;
-      if (!connected || session?.phase !== 'work' || stationId || help || cupboardUse) return;
+      if (!connected || session?.phase !== 'work' || stationId || help || interactionLocked) return;
       const dx =
         Number(keys.has('d') || keys.has('arrowright')) -
         Number(keys.has('a') || keys.has('arrowleft'));
@@ -1109,6 +1145,58 @@
                               : 'E — Open ticket'}</text
                         >{/if}</g
                     >{/each}
+                  {#each (session.accessPanels ?? []).filter((a) => pageAt(a)?.id === currentPage.id) as panel (panel.id)}
+                    <g
+                      class="access-panel"
+                      data-panel-id={panel.id}
+                      data-door={panel.open === true ? 'open' : 'closed'}
+                      transform={`translate(${panel.x},${panel.y})`}
+                    >
+                      <title>Maintenance access panel</title>
+                      <rect
+                        x="-32"
+                        y="-45"
+                        width="64"
+                        height="42"
+                        rx="3"
+                        fill="#101821"
+                        stroke="#c6a96c"
+                        stroke-width="2"
+                      />
+                      {#if panel.open === true}
+                        <path d="M-32 -45L-46 -58H18L32 -45Z" fill="#63727e" stroke="#c6a96c" />
+                        <path
+                          d="M-19 -38V-10M19 -38V-10M-19 -30H19M-19 -18H19"
+                          stroke="#657483"
+                          stroke-width="3"
+                        />
+                      {:else}
+                        <rect x="-28" y="-41" width="56" height="34" rx="2" fill="#465764" />
+                        <path
+                          d="M-20 -32H20M-20 -24H20M-20 -16H20"
+                          stroke="#aeb9c0"
+                          stroke-width="2"
+                        />
+                      {/if}
+                      <text x="0" y="-66" text-anchor="middle" fill="#dac28c" font-size="11"
+                        >MAINTENANCE</text
+                      >
+                      {#if nearbyAccess?.id === panel.id}
+                        <rect
+                          x="-98"
+                          y="30"
+                          width="196"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#c6a96c"
+                        />
+                        <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
+                          >Use access panel · E</text
+                        >
+                      {/if}
+                    </g>
+                  {/each}
                   {#each (session.cupboards ?? []).filter((c) => pageAt(c)?.id === currentPage.id) as cupboard (cupboard.id)}
                     <g
                       class="supply-cupboard"
@@ -1189,7 +1277,7 @@
                       fill="#535c69"
                       rx="3"
                     />{/each}
-                  {#each session.players.filter((p) => p.visible && !(p.id === session?.self && hidden) && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
+                  {#each session.players.filter((p) => p.visible && !(p.id === session?.self && (hidden || travelling)) && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
                     {@const position = renderedPositions[person.id] ?? person}
                     <g
                       class="map-player"
@@ -1294,9 +1382,11 @@
               </svg>
               {#if limitedVision}
                 <div class="visibility-hint">
-                  {hidden
-                    ? 'Hidden in cupboard · Half visibility · E to leave'
-                    : 'Your light shows nearby colleagues. Walls block light and sight.'}
+                  {accessUse
+                    ? accessLabel
+                    : hidden
+                      ? 'Hidden in cupboard · Half visibility · E to leave'
+                      : 'Your light shows nearby colleagues. Walls block light and sight.'}
                 </div>
               {/if}
               <div class="map-footer">
@@ -1338,6 +1428,16 @@
                 >
               </div>
               <div class="context-actions">
+                {#if nearbyAccess || accessUse}
+                  <button class="secondary wide" disabled={!!accessUse} onclick={useAccess}
+                    >{accessLabel}</button
+                  >
+                  <small role="status"
+                    >{travelling
+                      ? 'In transit. You cannot see colleagues or take actions.'
+                      : 'Connects to the opposite wing. Entry and exit are visible.'}</small
+                  >
+                {/if}
                 {#if nearbyCupboard || cupboardUse}
                   <button
                     class="secondary wide"
@@ -1372,7 +1472,7 @@
                     >Call standup ({session.meetingsLeft} left) · E</button
                   >{/if}{#if session.role === 'tester' && me?.active}<button
                     class="sabotage wide"
-                    disabled={!!cupboardUse || session.incident || sabotageCooldown > 0}
+                    disabled={interactionLocked || session.incident || sabotageCooldown > 0}
                     onclick={() => act({ type: 'sabotage' })}
                     >{sabotageCooldown
                       ? `Break CI ready in ${sabotageCooldown}s`
@@ -1567,6 +1667,15 @@
       <p>
         If you are on training, finish your tickets, but don’t vote or reveal what you saw on Teams.
         Roles stay private until the retrospective.
+      </p>
+      <p>
+        One pair of maintenance access panels connects either Development and Kitchen or Server
+        Cupboard and Product Corner, chosen randomly each sprint. Each endpoint has two possible
+        locations. Everyone can see the active panel from anywhere on its page. Only the active Tester
+        can press <b>E</b> to travel. Entry, travel and exit each take one second. Entry and exit are
+        visible; during travel you are hidden and cannot see colleagues. Movement and other actions are
+        blocked throughout. Used panels remain open. A standup interrupts travel at the entrance unless
+        you have already begun exiting.
       </p>
       <button class="primary" onclick={() => (help = false)}>Sounds suspicious. I’m in.</button>
     </div>
