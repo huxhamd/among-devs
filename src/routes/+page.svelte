@@ -63,6 +63,7 @@
   let noticeRemaining = 0;
   let saved: { name: string; code: string; token: string } | null = null;
   let me = $derived(session?.players.find((p) => p.id === session?.self));
+  let inRound = $derived(!!session && session.phase !== 'lobby' && session.phase !== 'ended');
   let currentPage = $derived((me && pageAt(renderedPositions[me.id] ?? me)) || PAGES[0]);
   let lightPosition = $derived(me ? (renderedPositions[me.id] ?? me) : undefined);
   let limitedVision = $derived(session?.phase === 'work' && me?.active);
@@ -399,6 +400,13 @@
       )
         return;
       const key = event.key.toLowerCase();
+      // Arrow keys scroll the ticket list when it has keyboard focus.
+      if (
+        key.startsWith('arrow') &&
+        event.target instanceof HTMLElement &&
+        event.target.closest('.task-details')
+      )
+        return;
       if (
         ['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(key) &&
         session?.phase === 'work' &&
@@ -524,7 +532,7 @@
   /></svelte:head
 >
 
-<div class="app-shell">
+<div class="app-shell" class:in-round={inRound}>
   <header>
     <a class="brand" href="/" aria-label="Among Devs home"
       ><span class="brand-icon">a<span>.</span></span> among<span class="brand-light">devs</span
@@ -631,10 +639,13 @@
                   : 'Operation: ship it.'}
           </h1>
         </div>
-        <div class="code-box">
-          <small>WORKSPACE CODE</small><button onclick={copy}
-            >{session.code} <span>{copied ? '✓' : '⧉'}</span></button
-          >
+        <div class="workspace-tools">
+          <div class="code-box">
+            <small>WORKSPACE CODE</small><button onclick={copy}
+              >{session.code} <span>{copied ? '✓' : '⧉'}</span></button
+            >
+          </div>
+          {#if inRound}<button class="quiet" onclick={leave}>← Leave workspace</button>{/if}
         </div>
       </div>
       {#if !connected}<div class="banner danger">
@@ -718,56 +729,58 @@
             >{:else}<p>Waiting for the host to open the next sprint.</p>{/if}
         </section>
       {:else}
-        <div class="status-strip">
-          <div class:tester={session.role === 'tester'} class="role-tag">
-            YOU ARE {session.role === 'tester' ? 'THE TESTER' : 'A DEV'}{!me?.active
-              ? ' · ON TRAINING'
-              : ''}
-          </div>
-          <div class="release">
-            <span>RELEASE READINESS <b>{session.progress}/{session.total}</b></span>
-            <div class="progress">
-              <i style:width={`${session.total ? (session.progress / session.total) * 100 : 0}%`}
-              ></i>
+        <div class="game-hud">
+          <div class="status-strip">
+            <div class:tester={session.role === 'tester'} class="role-tag">
+              YOU ARE {session.role === 'tester' ? 'THE TESTER' : 'A DEV'}{!me?.active
+                ? ' · ON TRAINING'
+                : ''}
             </div>
-          </div>
-          <div class="timer">
-            {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-            <small
-              >{session.phase === 'meeting'
-                ? 'TO VOTE'
-                : session.phase === 'meeting-result'
-                  ? session.meetingResult?.continues
-                    ? 'TO RESUME'
-                    : 'TO FINISH'
-                  : 'TO DEADLINE'}</small
-            >
-          </div>
-        </div>
-        <div class:offline={session.incident} class="ci-banner">
-          <div
-            class:active={!session.incident}
-            class="ci-banner-message online"
-            role="status"
-            aria-hidden={session.incident}
-          >
-            <span class="ci-banner-icon" aria-hidden="true">✓</span>
-            <div class="ci-banner-copy">
-              <strong>CI operational</strong><span>Tickets can proceed.</span>
+            <div class="release">
+              <span>RELEASE READINESS <b>{session.progress}/{session.total}</b></span>
+              <div class="progress">
+                <i style:width={`${session.total ? (session.progress / session.total) * 100 : 0}%`}
+                ></i>
+              </div>
             </div>
-          </div>
-          <div
-            class:active={session.incident}
-            class="ci-banner-message outage"
-            role="alert"
-            aria-hidden={!session.incident}
-          >
-            <span class="ci-banner-icon" aria-hidden="true">!</span>
-            <div class="ci-banner-copy">
-              <strong>CI is down · {session.repair?.step ?? 0}/3 repair steps saved</strong><span
-                >Go to the CI Control Console at the top of the central office and press E to repair
-                CI. An active colleague must restore CI before tickets can continue.</span
+            <div class="timer">
+              {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+              <small
+                >{session.phase === 'meeting'
+                  ? 'TO VOTE'
+                  : session.phase === 'meeting-result'
+                    ? session.meetingResult?.continues
+                      ? 'TO RESUME'
+                      : 'TO FINISH'
+                    : 'TO DEADLINE'}</small
               >
+            </div>
+          </div>
+          <div class:offline={session.incident} class="ci-banner">
+            <div
+              class:active={!session.incident}
+              class="ci-banner-message online"
+              role="status"
+              aria-hidden={session.incident}
+            >
+              <span class="ci-banner-icon" aria-hidden="true">✓</span>
+              <div class="ci-banner-copy">
+                <strong>CI operational</strong><span>Tickets can proceed.</span>
+              </div>
+            </div>
+            <div
+              class:active={session.incident}
+              class="ci-banner-message outage"
+              role="alert"
+              aria-hidden={!session.incident}
+            >
+              <span class="ci-banner-icon" aria-hidden="true">!</span>
+              <div class="ci-banner-copy">
+                <strong>CI is down · {session.repair?.step ?? 0}/3 repair steps saved</strong><span
+                  >Go to the CI Control Console at the top of the central office and press E to
+                  repair CI. An active colleague must restore CI before tickets can continue.</span
+                >
+              </div>
             </div>
           </div>
         </div>
@@ -813,6 +826,7 @@
             <section class="map-panel">
               <svg
                 viewBox={`${currentPage.x} ${currentPage.y} 1000 620`}
+                preserveAspectRatio="xMidYMid meet"
                 role="img"
                 aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, at the central table to call a standup, or at the top-centre CI Control Console to repair or break CI. Testers can press B anywhere to break CI or T near a colleague to send them on training."
               >
@@ -839,6 +853,9 @@
                   </radialGradient>
                   <clipPath id="visibility-area" clipPathUnits="userSpaceOnUse">
                     <polygon points={lightPoints} />
+                  </clipPath>
+                  <clipPath id="room-bounds" clipPathUnits="userSpaceOnUse">
+                    <rect x={currentPage.x} y={currentPage.y} width="1000" height="620" />
                   </clipPath>
                   <clipPath id="visibility-radius" clipPathUnits="userSpaceOnUse">
                     <circle
@@ -871,311 +888,326 @@
                     <stop offset="100%" stop-color="#ffe4a3" stop-opacity="0" />
                   </radialGradient>
                 </defs>
-                <rect
-                  x={currentPage.x}
-                  y={currentPage.y}
-                  width="1000"
-                  height="620"
-                  fill="url(#floor)"
-                />
-                <rect
-                  x={currentPage.x + 20}
-                  y={currentPage.y + 20}
-                  width="960"
-                  height="580"
-                  rx="12"
-                  fill={currentPage.color}
-                  opacity=".6"
-                />
-                {#each EXITS.filter((exit) => exit.from === currentPage.id) as exit}
-                  {@const localX = exit.x - currentPage.x}
-                  {@const localY = exit.y - currentPage.y}
-                  {@const label = exit.vertical ? exit.label.replace(/[←→]/u, '↑') : exit.label}
-                  {@const labelX = exit.vertical ? exit.x + (localX === 0 ? 35 : -35) : exit.x}
-                  {@const labelY = exit.vertical ? exit.y : exit.y + (localY === 0 ? 35 : -25)}
+                <g clip-path="url(#room-bounds)">
                   <rect
-                    x={exit.x - (exit.vertical ? 14 : 55)}
-                    y={exit.y - (exit.vertical ? 55 : 14)}
-                    width={exit.vertical ? 28 : 110}
-                    height={exit.vertical ? 110 : 28}
-                    fill="#5eead4"
-                    opacity=".25"
-                  />
-                  <text
-                    x={labelX}
-                    y={labelY}
-                    transform={exit.vertical
-                      ? `rotate(${localX === 0 ? -90 : 90} ${labelX} ${labelY})`
-                      : undefined}
-                    text-anchor="middle"
-                    dominant-baseline={exit.vertical ? 'middle' : undefined}
-                    fill="#9de7d7"
-                    font-size="14">{label}</text
-                  >
-                {/each}
-                <text class="room-label" x={currentPage.x + 170} y={currentPage.y + 45}
-                  >{currentPage.name.toUpperCase()}</text
-                >
-                {#if currentPage.id === 'centre'}
-                  <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
-                    <rect
-                      x={-CI_CONSOLE.width / 2}
-                      y="-36"
-                      width={CI_CONSOLE.width}
-                      height="68"
-                      rx="5"
-                      fill="#394351"
-                      stroke={atConsole ? '#c3b6ff' : '#83909e'}
-                      stroke-width="3"
-                    />
-                    <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
-                    <text y="-12" text-anchor="middle" fill="#e7eeff" font-size="12"
-                      >CI CONTROL CONSOLE</text
-                    >
-                    <path
-                      d={session.incident ? 'M-55 4H-12M12 4H55M-5 -1L5 9M5 -1L-5 9' : 'M-55 4H55'}
-                      fill="none"
-                      stroke={session.incident ? '#fda4af' : '#5eead4'}
-                      stroke-width="3"
-                    />
-                    <circle cx="-55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
-                    <circle cx="55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
-                    <text
-                      y="20"
-                      text-anchor="middle"
-                      fill={session.incident ? '#fda4af' : '#5eead4'}
-                      font-size="11"
-                      >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
-                    >
-                    {#if atConsole && !report && !trainingTarget}
-                      <rect
-                        x="-105"
-                        y="76"
-                        width="210"
-                        height="27"
-                        rx="5"
-                        fill="#17212b"
-                        stroke={session.incident
-                          ? me?.active
-                            ? '#c3b6ff'
-                            : '#83909e'
-                          : session.role === 'tester' && me?.active && !sabotageCooldown
-                            ? '#fda4af'
-                            : '#5eead4'}
-                      />
-                      <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
-                        >{session.incident
-                          ? me?.active
-                            ? 'E — Repair CI'
-                            : 'Active colleague required'
-                          : session.role === 'tester' && me?.active
-                            ? sabotageCooldown
-                              ? `Break CI ready in ${sabotageCooldown}s`
-                              : 'E — Break CI'
-                            : 'CI operational ✓'}</text
-                      >
-                    {/if}
-                  </g>
-                  <rect
-                    x="442"
-                    y="270"
-                    width="116"
-                    height="80"
-                    rx="30"
-                    fill="#574d42"
-                    stroke="#897460"
-                    stroke-width="2"
-                  /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
-                    >STANDUP</text
-                  >
-                  {#if atTable && me?.active && !report && !trainingTarget}
-                    <rect
-                      x="395"
-                      y="364"
-                      width="210"
-                      height="27"
-                      rx="5"
-                      fill="#17212b"
-                      stroke="#c3b6ff"
-                    />
-                    <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
-                      >{!session.meetingsLeft
-                        ? 'No standups remaining'
-                        : session.incident
-                          ? 'CI down — standup blocked'
-                          : 'E — Call standup'}</text
-                    >
-                  {/if}
-                {/if}
-                {#each STATIONS.filter((item) => pageAt(item)?.id === currentPage.id) as item}<g
-                    ><rect
-                      x={item.x - 55}
-                      y={item.y - 25}
-                      width="110"
-                      height="55"
-                      rx="10"
-                      fill={session.completed.includes(item.id) ? '#25463e' : '#4a5262'}
-                      stroke={nearby?.id === item.id && !report && !trainingTarget
-                        ? '#c3b6ff'
-                        : '#637082'}
-                      stroke-width="2"
-                    /><text
-                      x={item.x}
-                      y={item.y + 12}
-                      text-anchor="middle"
-                      font-size="31"
-                      fill="#d6dce8">{session.completed.includes(item.id) ? '✓' : item.symbol}</text
-                    ><text
-                      x={item.x}
-                      y={item.y + 53}
-                      text-anchor="middle"
-                      fill="#b9c2d1"
-                      font-size="12">{item.name}</text
-                    >{#if nearby?.id === item.id && !report && !trainingTarget}<rect
-                        x={item.x - 95}
-                        y={item.y + 68}
-                        width="190"
-                        height="27"
-                        rx="5"
-                        fill="#17212b"
-                        stroke="#c3b6ff"
-                      /><text
-                        x={item.x}
-                        y={item.y + 86}
-                        text-anchor="middle"
-                        fill="#ffffff"
-                        font-size="14"
-                        >{session.completed.includes(item.id)
-                          ? 'Ticket already closed ✓'
-                          : session.incident
-                            ? 'CI down — ticket blocked'
-                            : 'E — Open ticket'}</text
-                      >{/if}</g
-                  >{/each}
-                {#if limitedVision}
-                  <rect
-                    class="visibility-shade"
                     x={currentPage.x}
                     y={currentPage.y}
                     width="1000"
                     height="620"
-                    fill="#080c14"
-                    opacity="0.62"
-                    mask="url(#visibility-mask)"
-                    pointer-events="none"
-                    aria-hidden="true"
+                    fill="url(#floor)"
                   />
-                {/if}
-                <!-- Navigation geometry stays readable even beyond the light. -->
-                {#each WALLS as wall}<rect
-                    x={wall.x}
-                    y={wall.y}
-                    width={wall.w}
-                    height={wall.h}
-                    fill="#535c69"
-                    rx="3"
-                  />{/each}
-                {#each session.players.filter((p) => p.visible && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
-                  {@const position = renderedPositions[person.id] ?? person}
-                  <g
-                    class="map-player"
-                    data-player-id={person.id}
-                    transition:fade={{ duration: 250 }}
-                    style:opacity={!person.connected ? 0.35 : person.active ? 1 : 0.5}
-                    transform={`translate(${position.x},${position.y})`}
-                    >{#if limitedVision && person.active}
-                      <!-- Shares the avatar's visibility and existing 250ms fade. -->
-                      <g
-                        transform={`translate(${-position.x},${-position.y})`}
-                        clip-path="url(#visibility-area)"
-                      >
-                        <circle
-                          class="player-glow"
-                          cx={position.x}
-                          cy={position.y}
-                          r={person.id === session.self ? 64 : 42}
-                          fill="url(#player-glow)"
-                          opacity={person.id === session.self ? 1 : 0.65}
-                          clip-path="url(#visibility-radius)"
-                          pointer-events="none"
-                          aria-hidden="true"
-                        />
-                      </g>
-                    {/if}<ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
-                      x="-15"
-                      y="-20"
-                      width="30"
-                      height="38"
-                      rx="12"
-                      fill={person.color}
-                    /><rect
-                      x="-8"
-                      y="-12"
-                      width="21"
-                      height="12"
-                      rx="5"
-                      fill="#253245"
-                      stroke="#e7eeff"
-                      stroke-width="2"
-                    />{#if !person.active}<text
-                        x="0"
-                        y="10"
-                        text-anchor="middle"
-                        fill="#202631"
-                        font-size="18">×</text
-                      >{/if}{#if person.id === session.self}<path
-                        d="M-5 -39L0 -32L5 -39"
-                        fill="#fff"
-                      />{/if}<text
-                      y="-25"
+                  <rect
+                    x={currentPage.x + 20}
+                    y={currentPage.y + 20}
+                    width="960"
+                    height="580"
+                    rx="12"
+                    fill={currentPage.color}
+                    opacity=".6"
+                  />
+                  {#each EXITS.filter((exit) => exit.from === currentPage.id) as exit}
+                    {@const localX = exit.x - currentPage.x}
+                    {@const localY = exit.y - currentPage.y}
+                    {@const label = exit.vertical ? exit.label.replace(/[←→]/u, '↑') : exit.label}
+                    {@const labelX = exit.vertical ? exit.x + (localX === 0 ? 35 : -35) : exit.x}
+                    {@const labelY = exit.vertical ? exit.y : exit.y + (localY === 0 ? 35 : -25)}
+                    <rect
+                      x={exit.x - (exit.vertical ? 14 : 55)}
+                      y={exit.y - (exit.vertical ? 55 : 14)}
+                      width={exit.vertical ? 28 : 110}
+                      height={exit.vertical ? 110 : 28}
+                      fill="#5eead4"
+                      opacity=".25"
+                    />
+                    <text
+                      x={labelX}
+                      y={labelY}
+                      transform={exit.vertical
+                        ? `rotate(${localX === 0 ? -90 : 90} ${labelX} ${labelY})`
+                        : undefined}
                       text-anchor="middle"
-                      font-size="12"
-                      fill="#fff"
-                      stroke="#202631"
-                      stroke-width="3"
-                      paint-order="stroke"
-                      >{person.name}{person.id === session.self ? ' (you)' : ''}</text
-                    >{#if report?.id === person.id}<rect
-                        x="-105"
-                        y={position.y - currentPage.y > 555 ? -74 : 34}
+                      dominant-baseline={exit.vertical ? 'middle' : undefined}
+                      fill="#9de7d7"
+                      font-size="14">{label}</text
+                    >
+                  {/each}
+                  <text class="room-label" x={currentPage.x + 170} y={currentPage.y + 45}
+                    >{currentPage.name.toUpperCase()}</text
+                  >
+                  {#if currentPage.id === 'centre'}
+                    <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
+                      <rect
+                        x={-CI_CONSOLE.width / 2}
+                        y="-36"
+                        width={CI_CONSOLE.width}
+                        height="68"
+                        rx="5"
+                        fill="#394351"
+                        stroke={atConsole ? '#c3b6ff' : '#83909e'}
+                        stroke-width="3"
+                      />
+                      <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
+                      <text y="-12" text-anchor="middle" fill="#e7eeff" font-size="12"
+                        >CI CONTROL CONSOLE</text
+                      >
+                      <path
+                        d={session.incident
+                          ? 'M-55 4H-12M12 4H55M-5 -1L5 9M5 -1L-5 9'
+                          : 'M-55 4H55'}
+                        fill="none"
+                        stroke={session.incident ? '#fda4af' : '#5eead4'}
+                        stroke-width="3"
+                      />
+                      <circle
+                        cx="-55"
+                        cy="4"
+                        r="4"
+                        fill={session.incident ? '#fda4af' : '#5eead4'}
+                      />
+                      <circle
+                        cx="55"
+                        cy="4"
+                        r="4"
+                        fill={session.incident ? '#fda4af' : '#5eead4'}
+                      />
+                      <text
+                        y="20"
+                        text-anchor="middle"
+                        fill={session.incident ? '#fda4af' : '#5eead4'}
+                        font-size="11"
+                        >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
+                      >
+                      {#if atConsole && !report && !trainingTarget}
+                        <rect
+                          x="-105"
+                          y="76"
+                          width="210"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke={session.incident
+                            ? me?.active
+                              ? '#c3b6ff'
+                              : '#83909e'
+                            : session.role === 'tester' && me?.active && !sabotageCooldown
+                              ? '#fda4af'
+                              : '#5eead4'}
+                        />
+                        <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
+                          >{session.incident
+                            ? me?.active
+                              ? 'E — Repair CI'
+                              : 'Active colleague required'
+                            : session.role === 'tester' && me?.active
+                              ? sabotageCooldown
+                                ? `Break CI ready in ${sabotageCooldown}s`
+                                : 'E — Break CI'
+                              : 'CI operational ✓'}</text
+                        >
+                      {/if}
+                    </g>
+                    <rect
+                      x="442"
+                      y="270"
+                      width="116"
+                      height="80"
+                      rx="30"
+                      fill="#574d42"
+                      stroke="#897460"
+                      stroke-width="2"
+                    /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
+                      >STANDUP</text
+                    >
+                    {#if atTable && me?.active && !report && !trainingTarget}
+                      <rect
+                        x="395"
+                        y="364"
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#c3b6ff"
+                      />
+                      <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
+                        >{!session.meetingsLeft
+                          ? 'No standups remaining'
+                          : session.incident
+                            ? 'CI down — standup blocked'
+                            : 'E — Call standup'}</text
+                      >
+                    {/if}
+                  {/if}
+                  {#each STATIONS.filter((item) => pageAt(item)?.id === currentPage.id) as item}<g
+                      ><rect
+                        x={item.x - 55}
+                        y={item.y - 25}
+                        width="110"
+                        height="55"
+                        rx="10"
+                        fill={session.completed.includes(item.id) ? '#25463e' : '#4a5262'}
+                        stroke={nearby?.id === item.id && !report && !trainingTarget
+                          ? '#c3b6ff'
+                          : '#637082'}
+                        stroke-width="2"
                       /><text
-                        y={position.y - currentPage.y > 555 ? -56 : 52}
+                        x={item.x}
+                        y={item.y + 12}
                         text-anchor="middle"
-                        fill="#ffffff"
-                        font-size="14">E — Report training notice</text
-                      >{:else if trainingTarget?.id === person.id}<rect
-                        x="-105"
-                        y={position.y - currentPage.y > 555 ? -74 : 34}
-                        width="210"
-                        height="27"
+                        font-size="31"
+                        fill="#d6dce8"
+                        >{session.completed.includes(item.id) ? '✓' : item.symbol}</text
+                      ><text
+                        x={item.x}
+                        y={item.y + 53}
+                        text-anchor="middle"
+                        fill="#b9c2d1"
+                        font-size="12">{item.name}</text
+                      >{#if nearby?.id === item.id && !report && !trainingTarget}<rect
+                          x={item.x - 95}
+                          y={item.y + 68}
+                          width="190"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#c3b6ff"
+                        /><text
+                          x={item.x}
+                          y={item.y + 86}
+                          text-anchor="middle"
+                          fill="#ffffff"
+                          font-size="14"
+                          >{session.completed.includes(item.id)
+                            ? 'Ticket already closed ✓'
+                            : session.incident
+                              ? 'CI down — ticket blocked'
+                              : 'E — Open ticket'}</text
+                        >{/if}</g
+                    >{/each}
+                  {#if limitedVision}
+                    <rect
+                      class="visibility-shade"
+                      x={currentPage.x}
+                      y={currentPage.y}
+                      width="1000"
+                      height="620"
+                      fill="#080c14"
+                      opacity="0.62"
+                      mask="url(#visibility-mask)"
+                      pointer-events="none"
+                      aria-hidden="true"
+                    />
+                  {/if}
+                  <!-- Navigation geometry stays readable even beyond the light. -->
+                  {#each WALLS as wall}<rect
+                      x={wall.x}
+                      y={wall.y}
+                      width={wall.w}
+                      height={wall.h}
+                      fill="#535c69"
+                      rx="3"
+                    />{/each}
+                  {#each session.players.filter((p) => p.visible && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
+                    {@const position = renderedPositions[person.id] ?? person}
+                    <g
+                      class="map-player"
+                      data-player-id={person.id}
+                      transition:fade={{ duration: 250 }}
+                      style:opacity={!person.connected ? 0.35 : person.active ? 1 : 0.5}
+                      transform={`translate(${position.x},${position.y})`}
+                      >{#if limitedVision && person.active}
+                        <!-- Shares the avatar's visibility and existing 250ms fade. -->
+                        <g
+                          transform={`translate(${-position.x},${-position.y})`}
+                          clip-path="url(#visibility-area)"
+                        >
+                          <circle
+                            class="player-glow"
+                            cx={position.x}
+                            cy={position.y}
+                            r={person.id === session.self ? 64 : 42}
+                            fill="url(#player-glow)"
+                            opacity={person.id === session.self ? 1 : 0.65}
+                            clip-path="url(#visibility-radius)"
+                            pointer-events="none"
+                            aria-hidden="true"
+                          />
+                        </g>
+                      {/if}<ellipse cy="20" rx="19" ry="7" fill="#0006" /><rect
+                        x="-15"
+                        y="-20"
+                        width="30"
+                        height="38"
+                        rx="12"
+                        fill={person.color}
+                      /><rect
+                        x="-8"
+                        y="-12"
+                        width="21"
+                        height="12"
                         rx="5"
-                        fill="#17212b"
-                        stroke="#fda4af"
-                      /><text
-                        y={position.y - currentPage.y > 555 ? -56 : 52}
+                        fill="#253245"
+                        stroke="#e7eeff"
+                        stroke-width="2"
+                      />{#if !person.active}<text
+                          x="0"
+                          y="10"
+                          text-anchor="middle"
+                          fill="#202631"
+                          font-size="18">×</text
+                        >{/if}{#if person.id === session.self}<path
+                          d="M-5 -39L0 -32L5 -39"
+                          fill="#fff"
+                        />{/if}<text
+                        y="-25"
                         text-anchor="middle"
-                        fill="#ffffff"
-                        font-size="14">T — Send Dev on training</text
-                      >{:else if trainingCooldownTarget?.id === person.id}<rect
-                        x="-105"
-                        y={position.y - currentPage.y > 555 ? -74 : 34}
-                        width="210"
-                        height="27"
-                        rx="5"
-                        fill="#17212b"
-                        stroke="#83909e"
-                      /><text
-                        y={position.y - currentPage.y > 555 ? -56 : 52}
-                        text-anchor="middle"
-                        fill="#ffffff"
-                        font-size="14">Training ready in {cooldown}s</text
-                      >{/if}</g
-                  >{/each}
+                        font-size="12"
+                        fill="#fff"
+                        stroke="#202631"
+                        stroke-width="3"
+                        paint-order="stroke"
+                        >{person.name}{person.id === session.self ? ' (you)' : ''}</text
+                      >{#if report?.id === person.id}<rect
+                          x="-105"
+                          y={position.y - currentPage.y > 555 ? -74 : 34}
+                          width="210"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#c3b6ff"
+                        /><text
+                          y={position.y - currentPage.y > 555 ? -56 : 52}
+                          text-anchor="middle"
+                          fill="#ffffff"
+                          font-size="14">E — Report training notice</text
+                        >{:else if trainingTarget?.id === person.id}<rect
+                          x="-105"
+                          y={position.y - currentPage.y > 555 ? -74 : 34}
+                          width="210"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#fda4af"
+                        /><text
+                          y={position.y - currentPage.y > 555 ? -56 : 52}
+                          text-anchor="middle"
+                          fill="#ffffff"
+                          font-size="14">T — Send Dev on training</text
+                        >{:else if trainingCooldownTarget?.id === person.id}<rect
+                          x="-105"
+                          y={position.y - currentPage.y > 555 ? -74 : 34}
+                          width="210"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#83909e"
+                        /><text
+                          y={position.y - currentPage.y > 555 ? -56 : 52}
+                          text-anchor="middle"
+                          fill="#ffffff"
+                          font-size="14">Training ready in {cooldown}s</text
+                        >{/if}</g
+                    >{/each}
+                </g>
               </svg>
               {#if limitedVision}
                 <div class="visibility-hint">
@@ -1195,24 +1227,30 @@
               </div>
             </section>
             <aside class="panel task-panel">
-              <div class="eyebrow">
-                {session.role === 'tester' ? 'YOUR SECRET AGENDA' : 'YOUR SPRINT BACKLOG'}
-              </div>
-              <h2>
-                {session.role === 'tester' ? 'Delay. Deflect. Repeat.' : 'Let’s ship something.'}
-              </h2>
-              <p>
-                {session.role === 'tester'
-                  ? 'Blend in at workstations. Your tickets do not advance the release.'
-                  : !me?.active
-                    ? 'Training isn’t a holiday. Finish your tickets, but keep quiet on Teams.'
-                    : 'Visit each workstation and close your tickets.'}
-              </p>
-              <div class="task-list">
-                {#each STATIONS as item}<div class:done={session.completed.includes(item.id)}>
-                    <span>{session.completed.includes(item.id) ? '✓' : '○'}</span>
-                    <div><strong>{item.name}</strong><small>{item.room}</small></div>
-                  </div>{/each}
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable tickets need keyboard access.) -->
+              <div class="task-details" role="region" aria-label="Sprint tickets" tabindex="0">
+                <div class="eyebrow">
+                  {session.role === 'tester' ? 'YOUR SECRET AGENDA' : 'YOUR SPRINT BACKLOG'}
+                </div>
+                <h2>
+                  {session.role === 'tester' ? 'Delay. Deflect. Repeat.' : 'Let’s ship something.'}
+                </h2>
+                <p>
+                  {session.role === 'tester'
+                    ? 'Blend in at workstations. Your tickets do not advance the release.'
+                    : !me?.active
+                      ? 'Training isn’t a holiday. Finish your tickets, but keep quiet on Teams.'
+                      : 'Visit each workstation and close your tickets.'}
+                </p>
+                <div class="task-list">
+                  {#each STATIONS as item}<div class:done={session.completed.includes(item.id)}>
+                      <span>{session.completed.includes(item.id) ? '✓' : '○'}</span>
+                      <div><strong>{item.name}</strong><small>{item.room}</small></div>
+                    </div>{/each}
+                </div>
+                <small class="muted"
+                  >Standups happen at the centre table.<br />Your camera is your poker face.</small
+                >
               </div>
               <div class="context-actions">
                 {#if report && me?.active}<button
@@ -1254,14 +1292,11 @@
                     >{:else}<small>Three-person sprint: win by running out the clock.</small
                     >{/if}{/if}
               </div>
-              <small class="muted"
-                >Standups happen at the centre table.<br />Your camera is your poker face.</small
-              >
             </aside>
           </div>
         {/if}
       {/if}
-      <button class="quiet leave" onclick={leave}>← Leave workspace</button>
+      {#if !inRound}<button class="quiet leave" onclick={leave}>← Leave workspace</button>{/if}
     </main>
   {/if}
   {#if error}<div class:in-game={session?.phase === 'work'} class="toast error" role="alert">

@@ -450,6 +450,11 @@ footer > span:first-child {
   letter-spacing: -1px;
   margin: 12px 0;
 }
+.workspace-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 .code-box {
   border: 1px solid #414252;
   border-radius: 10px;
@@ -1266,6 +1271,155 @@ kbd {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+}
+/* Keep the round's controls compact in both fitted and scrolling layouts. */
+.in-round > header {
+  height: 56px;
+}
+.in-round > footer {
+  display: none;
+}
+.in-round .workspace {
+  min-height: 0;
+  padding: 12px 0;
+}
+.in-round .workspace-heading {
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.in-round .workspace-heading .eyebrow {
+  display: none;
+}
+.in-round .workspace-heading h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.in-round .code-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+}
+.in-round .code-box button {
+  font-size: 18px;
+}
+.game-hud {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  background: #11151c;
+}
+.game-hud .status-strip {
+  padding: 10px 14px;
+  margin: 0;
+}
+.game-hud .ci-banner {
+  margin: 0;
+}
+.game-hud .ci-banner-copy {
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 2px;
+}
+.game-hud .ci-banner-copy span {
+  flex: 1 1 300px;
+}
+.in-round .map-footer {
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  gap: 4px 10px;
+}
+.in-round .visibility-hint {
+  padding: 6px 12px;
+}
+.task-details:focus-visible {
+  outline: 2px solid #c3b6ff;
+  outline-offset: -2px;
+}
+
+/* Below this size, preserve readable content and let the document scroll. */
+@media (min-width: 761px) and (min-height: 560px) {
+  .app-shell.in-round {
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .in-round .workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .in-round .workspace-heading,
+  .in-round .game-hud,
+  .in-round .workspace > .banner {
+    flex-shrink: 0;
+    margin: 0;
+  }
+  .in-round .play-layout,
+  .in-round .meeting {
+    flex: 1;
+    min-height: 0;
+  }
+  .in-round .map-panel {
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+  .in-round .map-panel svg {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    background: #151a22;
+  }
+  .in-round .task-panel {
+    min-height: 0;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .in-round .task-details {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .in-round .context-actions {
+    flex-shrink: 0;
+    max-height: 60%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: 12px 0 0;
+  }
+  .in-round .context-actions:empty {
+    display: none;
+  }
+  .in-round .context-actions > * {
+    flex-shrink: 0;
+  }
+  .in-round .meeting {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+@media (max-width: 760px) {
+  .in-round .brand .badge {
+    display: none;
+  }
+  .in-round .workspace-tools {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .game-hud .status-strip {
+    gap: 10px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
