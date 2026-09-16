@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   nearestWithin,
+  CUPBOARD_SPAWNS,
   PAGES,
   STATIONS,
   EXITS,
@@ -52,6 +53,8 @@ test('five pages have reachable workstations and paired unobstructed exits', () 
     }
   }
   for (const station of STATIONS) assert.ok(visited.has(`${station.x},${station.y}`), station.id);
+  for (const cupboard of CUPBOARD_SPAWNS)
+    assert.ok(visited.has(`${cupboard.x},${cupboard.y}`), cupboard.id);
   assert.equal(walkable(-500, -310), false, 'missing corners are outside the office');
   assert.equal(walkable(500, -615), false, 'outer walls stop movement');
 });

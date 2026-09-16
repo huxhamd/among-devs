@@ -16,6 +16,27 @@ export const WIDTH = 1000;
 export const HEIGHT = 620;
 // Keep the visual light boundary aligned with server-authoritative visibility.
 export const VISIBILITY_RADIUS = 240;
+export const CUPBOARD_DURATION = 1000;
+export const CUPBOARD_REACH = 60;
+// Coordinates mark the floor directly in front of each cupboard.
+export const CUPBOARD_SPAWNS = [
+  { id: 'centre-left', x: 130, y: 130 },
+  { id: 'centre-right', x: 870, y: 490 },
+  { id: 'north-left', x: 110, y: -470 },
+  { id: 'north-right', x: 870, y: -300 },
+  { id: 'east-bottom', x: 1510, y: 510 },
+  { id: 'east-right', x: 1870, y: 190 },
+  { id: 'south-left', x: 150, y: 810 },
+  { id: 'south-right', x: 870, y: 1120 },
+  { id: 'west-left', x: -850, y: 230 },
+  { id: 'west-bottom', x: -360, y: 520 }
+] as const;
+export type CupboardUse = {
+  id: string;
+  phase: 'entering' | 'hidden' | 'exiting';
+  deadline: number;
+};
+export type Cupboard = { id: string; x: number; y: number; open: boolean };
 // One continuous world; the camera shows exactly one office page at a time.
 export const PAGES = [
   { id: 'centre', name: 'The Open Plan', x: 0, y: 0, color: '#303744' },
@@ -174,6 +195,8 @@ export type Person = {
   visible: boolean;
 };
 export type Snapshot = {
+  cupboards: (Omit<Cupboard, 'open'> & { open: boolean | null })[];
+  cupboard: CupboardUse | null;
   code: string;
   host: string;
   phase: Phase;
@@ -204,6 +227,7 @@ export type Snapshot = {
   winner: Role | null;
 };
 export type Action =
+  | { type: 'cupboard'; id: string }
   | { type: 'start' | 'reset' | 'meeting' | 'sabotage' | 'report' }
   | { type: 'repair'; puzzle: string; step: number; answer: string }
   | { type: 'move'; dx: number; dy: number }

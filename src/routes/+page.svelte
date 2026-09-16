@@ -4,9 +4,10 @@
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
-  import { lightPolygon } from '$lib/visibility';
+  import { canSee, lightPolygon } from '$lib/visibility';
   import {
     CI_CONSOLE,
+    CUPBOARD_REACH,
     STATIONS,
     WALLS,
     PAGES,
@@ -67,9 +68,30 @@
   let currentPage = $derived((me && pageAt(renderedPositions[me.id] ?? me)) || PAGES[0]);
   let lightPosition = $derived(me ? (renderedPositions[me.id] ?? me) : undefined);
   let limitedVision = $derived(session?.phase === 'work' && me?.active);
+  let cupboardUse = $derived(session?.cupboard);
+  let hidden = $derived(cupboardUse?.phase === 'hidden');
+  let visionRadius = $derived(hidden ? VISIBILITY_RADIUS / 2 : VISIBILITY_RADIUS);
+  let nearbyCupboard = $derived(
+    session?.role === 'tester' && me?.active
+      ? session.cupboards?.find((c) => canSee(me, c, CUPBOARD_REACH))
+      : undefined
+  );
+  let cupboardLabel = $derived(
+    cupboardUse
+      ? hidden
+        ? 'Leave cupboard · E'
+        : `${cupboardUse.phase === 'entering' ? 'Entering' : 'Exiting'} cupboard…`
+      : 'Hide in cupboard · E'
+  );
+  function useCupboard() {
+    const id = cupboardUse?.id ?? nearbyCupboard?.id;
+    if (!id || (cupboardUse && !hidden)) return;
+    keys.clear();
+    act({ type: 'cupboard', id });
+  }
   let lightPoints = $derived(
     limitedVision && lightPosition
-      ? lightPolygon(lightPosition)
+      ? lightPolygon(lightPosition, visionRadius)
           .map((point) => `${point.x},${point.y}`)
           .join(' ')
       : ''
@@ -82,16 +104,16 @@
   );
   let currentPuzzle = $derived(repairing ? session?.repair : session?.puzzles[stationId]);
   let nearby = $derived(
-    me
+    me && !cupboardUse
       ? STATIONS.find(
           (s) => pageAt(s)?.id === pageAt(me)?.id && Math.hypot(s.x - me.x, s.y - me.y) <= 80
         )
       : undefined
   );
-  let atTable = $derived(me ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
-  let atConsole = $derived(me ? atCiConsole(me) : false);
+  let atTable = $derived(me && !cupboardUse ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
+  let atConsole = $derived(me && !cupboardUse ? atCiConsole(me) : false);
   let target = $derived(
-    me && session
+    me && session && !cupboardUse
       ? nearestWithin(
           me,
           session.players.filter((p) => p.visible && p.active && p.id !== me.id),
@@ -100,7 +122,7 @@
       : undefined
   );
   let report = $derived(
-    session?.phase === 'work' && me?.active
+    session?.phase === 'work' && me?.active && !cupboardUse
       ? session.players.find(
           (p) =>
             p.visible && !p.active && !p.reported && me && Math.hypot(p.x - me.x, p.y - me.y) <= 80
@@ -428,6 +450,7 @@
         !stationId &&
         !help &&
         session.role === 'tester' &&
+        !cupboardUse &&
         me?.active &&
         !session.incident &&
         sabotageCooldown === 0
@@ -459,7 +482,10 @@
         !stationId &&
         !help
       ) {
-        if (report && me?.active) {
+        if (cupboardUse || nearbyCupboard) {
+          event.preventDefault();
+          useCupboard();
+        } else if (report && me?.active) {
           act({ type: 'report' });
         } else if (atConsole) {
           if (session.incident && me?.active) openRepair();
@@ -504,7 +530,7 @@
         saveTaskMetrics();
       }
       lastTaskTick = now;
-      if (!connected || session?.phase !== 'work' || stationId || help) return;
+      if (!connected || session?.phase !== 'work' || stationId || help || cupboardUse) return;
       const dx =
         Number(keys.has('d') || keys.has('arrowright')) -
         Number(keys.has('a') || keys.has('arrowleft'));
@@ -844,7 +870,7 @@
                     gradientUnits="userSpaceOnUse"
                     cx={lightPosition?.x ?? 0}
                     cy={lightPosition?.y ?? 0}
-                    r={VISIBILITY_RADIUS}
+                    r={visionRadius}
                   >
                     <stop offset="0%" stop-color="black" stop-opacity="1" />
                     <stop offset="65%" stop-color="black" stop-opacity="1" />
@@ -861,7 +887,7 @@
                     <circle
                       cx={lightPosition?.x ?? 0}
                       cy={lightPosition?.y ?? 0}
-                      r={VISIBILITY_RADIUS}
+                      r={visionRadius}
                     />
                   </clipPath>
                   <mask
@@ -1083,6 +1109,63 @@
                               : 'E — Open ticket'}</text
                         >{/if}</g
                     >{/each}
+                  {#each (session.cupboards ?? []).filter((c) => pageAt(c)?.id === currentPage.id) as cupboard (cupboard.id)}
+                    <g
+                      class="supply-cupboard"
+                      data-cupboard-id={cupboard.id}
+                      data-door={cupboard.open === null
+                        ? 'unknown'
+                        : cupboard.open
+                          ? 'open'
+                          : 'closed'}
+                      transform={`translate(${cupboard.x},${cupboard.y})`}
+                    >
+                      <title>Supply cupboard</title>
+                      <rect
+                        x="-31"
+                        y="-68"
+                        width="62"
+                        height="64"
+                        rx="4"
+                        fill="#171e28"
+                        stroke="#9ba6b5"
+                        stroke-width="2"
+                      />
+                      {#if cupboard.open === true}
+                        <path d="M-27 -45H27M-27 -25H27" stroke="#7c899a" stroke-width="3" />
+                        <rect x="-21" y="-40" width="18" height="12" fill="#bba278" />
+                        <path
+                          d="M-31 -68L-46 -58V6L-31 -4ZM31 -68L46 -58V6L31 -4Z"
+                          fill="#627181"
+                          stroke="#9ba6b5"
+                        />
+                      {:else}
+                        <rect x="-28" y="-65" width="56" height="58" fill="#627181" />
+                        <path
+                          d="M0 -65V-7M-6 -39V-29M6 -39V-29"
+                          stroke="#d1d9e2"
+                          stroke-width="2"
+                        />
+                      {/if}
+                      <text x="0" y="-76" text-anchor="middle" fill="#c6ced9" font-size="11"
+                        >SUPPLIES</text
+                      >
+                      {#if nearbyCupboard?.id === cupboard.id}
+                        <rect
+                          x="-104"
+                          y="30"
+                          width="208"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#c3b6ff"
+                        />
+                        <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
+                          >{cupboardLabel}</text
+                        >
+                      {/if}
+                    </g>
+                  {/each}
                   {#if limitedVision}
                     <rect
                       class="visibility-shade"
@@ -1106,7 +1189,7 @@
                       fill="#535c69"
                       rx="3"
                     />{/each}
-                  {#each session.players.filter((p) => p.visible && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
+                  {#each session.players.filter((p) => p.visible && !(p.id === session?.self && hidden) && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
                     {@const position = renderedPositions[person.id] ?? person}
                     <g
                       class="map-player"
@@ -1211,7 +1294,9 @@
               </svg>
               {#if limitedVision}
                 <div class="visibility-hint">
-                  Your light shows nearby colleagues. Walls block light and sight.
+                  {hidden
+                    ? 'Hidden in cupboard · Half visibility · E to leave'
+                    : 'Your light shows nearby colleagues. Walls block light and sight.'}
                 </div>
               {/if}
               <div class="map-footer">
@@ -1253,6 +1338,18 @@
                 >
               </div>
               <div class="context-actions">
+                {#if nearbyCupboard || cupboardUse}
+                  <button
+                    class="secondary wide"
+                    disabled={!!cupboardUse && !hidden}
+                    onclick={useCupboard}>{cupboardLabel}</button
+                  >
+                  {#if cupboardUse}<small role="status"
+                      >{hidden
+                        ? 'You are hidden. Visibility is halved. Leave to move or act.'
+                        : 'Colleagues can see you during entry and exit.'}</small
+                    >{/if}
+                {/if}
                 {#if report && me?.active}<button
                     class="secondary wide"
                     onclick={() => act({ type: 'report' })}>Report training notice · E</button
@@ -1275,7 +1372,7 @@
                     >Call standup ({session.meetingsLeft} left) · E</button
                   >{/if}{#if session.role === 'tester' && me?.active}<button
                     class="sabotage wide"
-                    disabled={session.incident || sabotageCooldown > 0}
+                    disabled={!!cupboardUse || session.incident || sabotageCooldown > 0}
                     onclick={() => act({ type: 'sabotage' })}
                     >{sabotageCooldown
                       ? `Break CI ready in ${sabotageCooldown}s`
@@ -1458,6 +1555,14 @@
         Call one standup per person at the central table, or report a nearby training notice.
         Discuss on Teams and vote here within 40 seconds. Ties and skips remove nobody. Work time
         pauses through voting and the three-second result countdown.
+      </p>
+      <p>
+        Three supply cupboards spawn each sprint on three different pages, chosen from two fixed
+        spots per page. Only the active Tester can press <b>E</b> nearby to hide or leave. Entering and
+        exiting take one second, during which you are visible and cannot move. While hidden, your sight
+        radius is halved and you must leave before taking other actions. Cupboards start shut, close while
+        occupied, and stay open after exit. You can reuse them. Standups bring you out of hiding. There
+        is no hiding time limit.
       </p>
       <p>
         If you are on training, finish your tickets, but don’t vote or reveal what you saw on Teams.
