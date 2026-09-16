@@ -8,6 +8,9 @@
     CI_CONSOLE,
     STATIONS,
     WALLS,
+    PAGES,
+    EXITS,
+    pageAt,
     atCiConsole,
     nearestWithin,
     type Snapshot,
@@ -58,6 +61,7 @@
   let noticeRemaining = 0;
   let saved: { name: string; code: string; token: string } | null = null;
   let me = $derived(session?.players.find((p) => p.id === session?.self));
+  let currentPage = $derived((me && pageAt(renderedPositions[me.id] ?? me)) || PAGES[0]);
   let repairing = $derived(stationId === 'ci');
   let station = $derived(
     repairing
@@ -66,7 +70,11 @@
   );
   let currentPuzzle = $derived(repairing ? session?.repair : session?.puzzles[stationId]);
   let nearby = $derived(
-    me ? STATIONS.find((s) => Math.hypot(s.x - me.x, s.y - me.y) <= 80) : undefined
+    me
+      ? STATIONS.find(
+          (s) => pageAt(s)?.id === pageAt(me)?.id && Math.hypot(s.x - me.x, s.y - me.y) <= 80
+        )
+      : undefined
   );
   let atTable = $derived(me ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false);
   let atConsole = $derived(me ? atCiConsole(me) : false);
@@ -207,28 +215,26 @@
     taskError = '';
     const submittedStation = stationId;
     metric(submittedStation).attempts++;
-    socket
-      .timeout(5000)
-      .emit(
-        'action',
-        (repairing
-          ? { type: 'repair', puzzle: puzzle.id, step: puzzle.step, answer }
-          : {
-              type: 'task',
-              station: stationId,
-              puzzle: puzzle.id,
-              step: puzzle.step,
-              answer
-            }) satisfies Action,
-        (timeout: Error | null, reply: Reply) => {
-          taskPending = false;
-          if ((timeout || reply.error) && stationId === submittedStation)
-            taskError = timeout ? 'Connection interrupted. Retry this step.' : reply.error!;
-          if (reply?.error?.includes('refinement') || reply?.error?.includes('setting will not'))
-            metric(submittedStation).failures++;
-          saveTaskMetrics();
-        }
-      );
+    socket.timeout(5000).emit(
+      'action',
+      (repairing
+        ? { type: 'repair', puzzle: puzzle.id, step: puzzle.step, answer }
+        : {
+            type: 'task',
+            station: stationId,
+            puzzle: puzzle.id,
+            step: puzzle.step,
+            answer
+          }) satisfies Action,
+      (timeout: Error | null, reply: Reply) => {
+        taskPending = false;
+        if ((timeout || reply.error) && stationId === submittedStation)
+          taskError = timeout ? 'Connection interrupted. Retry this step.' : reply.error!;
+        if (reply?.error?.includes('refinement') || reply?.error?.includes('setting will not'))
+          metric(submittedStation).failures++;
+        saveTaskMetrics();
+      }
+    );
   }
   function openRepair() {
     if (!connected || session?.phase !== 'work' || !session.repair || !me?.active || !atConsole)
@@ -795,7 +801,7 @@
           <div class="play-layout">
             <section class="map-panel">
               <svg
-                viewBox="0 0 1000 620"
+                viewBox={`${currentPage.x} ${currentPage.y} 1000 620`}
                 role="img"
                 aria-label="Office map. Move using WASD or arrow keys. Press E at a workstation for tickets, at the central table to call a standup, or at the top-centre CI Control Console to repair or break CI. Testers can press B anywhere to break CI or T near a colleague to send them on training."
               >
@@ -809,39 +815,41 @@
                     /></pattern
                   ></defs
                 >
-                <rect width="1000" height="620" rx="20" fill="url(#floor)" /><rect
-                  x="20"
-                  y="20"
-                  width="275"
-                  height="263"
-                  rx="10"
-                  fill="#333144"
-                  opacity=".6"
-                /><rect
-                  x="705"
-                  y="20"
-                  width="275"
-                  height="263"
-                  rx="10"
-                  fill="#233c3c"
-                  opacity=".6"
-                /><rect
-                  x="20"
-                  y="338"
-                  width="275"
-                  height="263"
-                  rx="10"
-                  fill="#423a2d"
-                  opacity=".6"
-                /><rect
-                  x="705"
-                  y="338"
-                  width="275"
-                  height="263"
-                  rx="10"
-                  fill="#353149"
+                <rect
+                  x={currentPage.x}
+                  y={currentPage.y}
+                  width="1000"
+                  height="620"
+                  fill="url(#floor)"
+                />
+                <rect
+                  x={currentPage.x + 20}
+                  y={currentPage.y + 20}
+                  width="960"
+                  height="580"
+                  rx="12"
+                  fill={currentPage.color}
                   opacity=".6"
                 />
+                {#each EXITS.filter((exit) => exit.from === currentPage.id) as exit}
+                  {@const localX = exit.x - currentPage.x}
+                  {@const localY = exit.y - currentPage.y}
+                  <rect
+                    x={exit.x - (exit.vertical ? 14 : 55)}
+                    y={exit.y - (exit.vertical ? 55 : 14)}
+                    width={exit.vertical ? 28 : 110}
+                    height={exit.vertical ? 110 : 28}
+                    fill="#5eead4"
+                    opacity=".25"
+                  />
+                  <text
+                    x={exit.vertical ? exit.x + (localX === 0 ? 80 : -80) : exit.x}
+                    y={exit.vertical ? exit.y - 85 : exit.y + (localY === 0 ? 35 : -25)}
+                    text-anchor="middle"
+                    fill="#9de7d7"
+                    font-size="14">{exit.label}</text
+                  >
+                {/each}
                 {#each WALLS as wall}<rect
                     x={wall.x}
                     y={wall.y}
@@ -850,105 +858,101 @@
                     fill="#535c69"
                     rx="3"
                   />{/each}
-                <text class="room-label" x="160" y="65">DEVELOPMENT</text><text
-                  class="room-label"
-                  x="840"
-                  y="65">SERVER CUPBOARD</text
-                ><text class="room-label" x="160" y="580">KITCHEN</text><text
-                  class="room-label"
-                  x="840"
-                  y="580">PRODUCT CORNER</text
-                ><text class="room-label" x="500" y="105">THE OPEN PLAN</text>
-                <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
-                  <rect
-                    x={-CI_CONSOLE.width / 2}
-                    y="-36"
-                    width={CI_CONSOLE.width}
-                    height="68"
-                    rx="5"
-                    fill="#394351"
-                    stroke={atConsole ? '#c3b6ff' : '#83909e'}
-                    stroke-width="3"
-                  />
-                  <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
-                  <text y="-12" text-anchor="middle" fill="#e7eeff" font-size="12"
-                    >CI CONTROL CONSOLE</text
-                  >
-                  <path
-                    d={session.incident ? 'M-55 4H-12M12 4H55M-5 -1L5 9M5 -1L-5 9' : 'M-55 4H55'}
-                    fill="none"
-                    stroke={session.incident ? '#fda4af' : '#5eead4'}
-                    stroke-width="3"
-                  />
-                  <circle cx="-55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
-                  <circle cx="55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
-                  <text
-                    y="20"
-                    text-anchor="middle"
-                    fill={session.incident ? '#fda4af' : '#5eead4'}
-                    font-size="11"
-                    >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
-                  >
-                  {#if atConsole && !report && !trainingTarget}
+                <text class="room-label" x={currentPage.x + 170} y={currentPage.y + 45}
+                  >{currentPage.name.toUpperCase()}</text
+                >
+                {#if currentPage.id === 'centre'}
+                  <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
                     <rect
-                      x="-105"
-                      y="76"
+                      x={-CI_CONSOLE.width / 2}
+                      y="-36"
+                      width={CI_CONSOLE.width}
+                      height="68"
+                      rx="5"
+                      fill="#394351"
+                      stroke={atConsole ? '#c3b6ff' : '#83909e'}
+                      stroke-width="3"
+                    />
+                    <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
+                    <text y="-12" text-anchor="middle" fill="#e7eeff" font-size="12"
+                      >CI CONTROL CONSOLE</text
+                    >
+                    <path
+                      d={session.incident ? 'M-55 4H-12M12 4H55M-5 -1L5 9M5 -1L-5 9' : 'M-55 4H55'}
+                      fill="none"
+                      stroke={session.incident ? '#fda4af' : '#5eead4'}
+                      stroke-width="3"
+                    />
+                    <circle cx="-55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
+                    <circle cx="55" cy="4" r="4" fill={session.incident ? '#fda4af' : '#5eead4'} />
+                    <text
+                      y="20"
+                      text-anchor="middle"
+                      fill={session.incident ? '#fda4af' : '#5eead4'}
+                      font-size="11"
+                      >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
+                    >
+                    {#if atConsole && !report && !trainingTarget}
+                      <rect
+                        x="-105"
+                        y="76"
+                        width="210"
+                        height="27"
+                        rx="5"
+                        fill="#17212b"
+                        stroke={session.incident
+                          ? me?.active
+                            ? '#c3b6ff'
+                            : '#83909e'
+                          : session.role === 'tester' && me?.active && !sabotageCooldown
+                            ? '#fda4af'
+                            : '#5eead4'}
+                      />
+                      <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
+                        >{session.incident
+                          ? me?.active
+                            ? 'E — Repair CI'
+                            : 'Active colleague required'
+                          : session.role === 'tester' && me?.active
+                            ? sabotageCooldown
+                              ? `Break CI ready in ${sabotageCooldown}s`
+                              : 'E — Break CI'
+                            : 'CI operational ✓'}</text
+                      >
+                    {/if}
+                  </g>
+                  <rect
+                    x="442"
+                    y="270"
+                    width="116"
+                    height="80"
+                    rx="30"
+                    fill="#574d42"
+                    stroke="#897460"
+                    stroke-width="2"
+                  /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
+                    >STANDUP</text
+                  >
+                  {#if atTable && me?.active && !report && !trainingTarget}
+                    <rect
+                      x="395"
+                      y="364"
                       width="210"
                       height="27"
                       rx="5"
                       fill="#17212b"
-                      stroke={session.incident
-                        ? me?.active
-                          ? '#c3b6ff'
-                          : '#83909e'
-                        : session.role === 'tester' && me?.active && !sabotageCooldown
-                          ? '#fda4af'
-                          : '#5eead4'}
+                      stroke="#c3b6ff"
                     />
-                    <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
-                      >{session.incident
-                        ? me?.active
-                          ? 'E — Repair CI'
-                          : 'Active colleague required'
-                        : session.role === 'tester' && me?.active
-                          ? sabotageCooldown
-                            ? `Break CI ready in ${sabotageCooldown}s`
-                            : 'E — Break CI'
-                          : 'CI operational ✓'}</text
+                    <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
+                      >{!session.meetingsLeft
+                        ? 'No standups remaining'
+                        : session.incident
+                          ? 'CI down — standup blocked'
+                          : 'E — Call standup'}</text
                     >
                   {/if}
-                </g>
-                <rect
-                  x="442"
-                  y="270"
-                  width="116"
-                  height="80"
-                  rx="30"
-                  fill="#574d42"
-                  stroke="#897460"
-                  stroke-width="2"
-                /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
-                  >STANDUP</text
-                >
-                {#if atTable && me?.active && !report && !trainingTarget}
-                  <rect
-                    x="395"
-                    y="364"
-                    width="210"
-                    height="27"
-                    rx="5"
-                    fill="#17212b"
-                    stroke="#c3b6ff"
-                  />
-                  <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
-                    >{!session.meetingsLeft
-                      ? 'No standups remaining'
-                      : session.incident
-                        ? 'CI down — standup blocked'
-                        : 'E — Call standup'}</text
-                  >
                 {/if}
-                {#each STATIONS as item}<g
+                {#each STATIONS.filter((item) => pageAt(item)?.id === currentPage.id) as item}<g
                     ><rect
                       x={item.x - 55}
                       y={item.y - 25}
@@ -993,7 +997,7 @@
                             : 'E — Open ticket'}</text
                       >{/if}</g
                   >{/each}
-                {#each session.players.filter((p) => p.visible && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
+                {#each session.players.filter((p) => p.visible && pageAt(renderedPositions[p.id] ?? p)?.id === currentPage.id && (p.active || !p.reported || p.id === session?.self)) as person (person.id)}
                   {@const position = renderedPositions[person.id] ?? person}
                   <g
                     transition:fade={{ duration: 250 }}
@@ -1035,40 +1039,40 @@
                       >{person.name}{person.id === session.self ? ' (you)' : ''}</text
                     >{#if report?.id === person.id}<rect
                         x="-105"
-                        y={position.y > 555 ? -74 : 34}
+                        y={position.y - currentPage.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#c3b6ff"
                       /><text
-                        y={position.y > 555 ? -56 : 52}
+                        y={position.y - currentPage.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">E — Report training notice</text
                       >{:else if trainingTarget?.id === person.id}<rect
                         x="-105"
-                        y={position.y > 555 ? -74 : 34}
+                        y={position.y - currentPage.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#fda4af"
                       /><text
-                        y={position.y > 555 ? -56 : 52}
+                        y={position.y - currentPage.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">T — Send Dev on training</text
                       >{:else if trainingCooldownTarget?.id === person.id}<rect
                         x="-105"
-                        y={position.y > 555 ? -74 : 34}
+                        y={position.y - currentPage.y > 555 ? -74 : 34}
                         width="210"
                         height="27"
                         rx="5"
                         fill="#17212b"
                         stroke="#83909e"
                       /><text
-                        y={position.y > 555 ? -56 : 52}
+                        y={position.y - currentPage.y > 555 ? -56 : 52}
                         text-anchor="middle"
                         fill="#ffffff"
                         font-size="14">Training ready in {cooldown}s</text
@@ -1076,6 +1080,11 @@
                   >{/each}
               </svg>
               <div class="map-footer">
+                <span aria-live="polite"
+                  >{currentPage.name} · {currentPage.id === 'centre'
+                    ? 'Central hub'
+                    : `${currentPage.id} wing`}</span
+                >
                 <span
                   ><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows to move &nbsp;
                   <kbd>E</kbd> to interact</span
@@ -1294,8 +1303,9 @@
         or only one active dev remains (4+ people).
       </p>
       <p>
-        Move with <b>WASD or arrow keys</b>. Doorways connect the four rooms through the central
-        office. Press <b>E</b> near a workstation to work on a ticket.
+        Move with <b>WASD or arrow keys</b>. Walk through the marked edge doorways to change
+        screens. Four wings connect through the central office. Press <b>E</b> near a workstation to work
+        on a ticket.
       </p>
       <p>
         The tester can press <b>B</b> anywhere to break CI every 45 seconds and press <b>T</b> to

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TASK_VARIANTS } from '../../src/lib/tasks';
+import { STATIONS, pageAt } from '../../src/lib/shared';
 
 async function moveTo(page: Page, x: number, y: number) {
   const position = async () => {
@@ -8,7 +9,7 @@ async function moveTo(page: Page, x: number, y: number) {
       .filter({ hasText: ' (you)' })
       .locator('..')
       .getAttribute('transform');
-    const values = transform!.match(/[\d.]+/g)!.map(Number);
+    const values = transform!.match(/-?[\d.]+/g)!.map(Number);
     return { x: values[0], y: values[1] };
   };
   for (const axis of ['x', 'y'] as const) {
@@ -33,7 +34,7 @@ async function moveTo(page: Page, x: number, y: number) {
 }
 
 test('all mini-task controls complete and accepted steps survive refresh', async ({ browser }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const contexts = await Promise.all([0, 1, 2].map(() => browser.newContext()));
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   const errors: string[] = [];
@@ -53,48 +54,62 @@ test('all mini-task controls complete and accepted steps survive refresh', async
     await expect(pages[0].locator('.role-reveal-card')).toBeVisible();
     await expect(pages[0].locator('.role-reveal-card')).toBeHidden({ timeout: 5000 });
     const page = pages[0];
-    // Cross room dividers through their doorways.
+    await expect(page.locator('.map-panel svg')).toHaveAttribute('viewBox', '0 0 1000 620');
+    await page.locator('.map-panel').screenshot({ path: 'test-results/map-centre.png' });
+    // Walk through actual page exits and the wing partitions.
     const visits = [
       {
         station: 'merge',
         waypoints: [
-          [425, 225],
-          [160, 225],
-          [160, 140]
+          [800, 280],
+          [800, -280],
+          [620, -280],
+          [420, -350]
         ]
       },
       {
         station: 'coffee',
         waypoints: [
-          [160, 225],
-          [500, 225],
-          [500, 400],
-          [160, 400],
-          [160, 480]
+          [620, -350],
+          [620, -280],
+          [800, -280],
+          [800, 280],
+          [500, 280],
+          [500, 780],
+          [730, 780],
+          [730, 980]
         ]
       },
       {
         station: 'ticket',
         waypoints: [
-          [160, 400],
-          [500, 400],
-          [840, 400],
-          [840, 480]
+          [730, 780],
+          [500, 780],
+          [500, 310],
+          [-180, 310],
+          [-180, 400],
+          [-540, 400],
+          [-540, 440]
         ]
       },
       {
         station: 'build',
         waypoints: [
-          [840, 400],
-          [500, 400],
-          [500, 225],
-          [840, 225],
-          [840, 140]
+          [-180, 440],
+          [-180, 310],
+          [1450, 310],
+          [1550, 180]
         ]
       }
     ];
     for (const { station, waypoints } of visits) {
       for (const [x, y] of waypoints) await moveTo(page, x, y);
+      const wing = pageAt(STATIONS.find((item) => item.id === station)!)!;
+      await expect(page.locator('.map-panel svg')).toHaveAttribute(
+        'viewBox',
+        `${wing.x} ${wing.y} 1000 620`
+      );
+      await page.locator('.map-panel').screenshot({ path: `test-results/map-${wing.id}.png` });
       await page.keyboard.press('e');
       const dialog = page.getByRole('dialog');
       await expect(dialog.locator('.mini-task')).toBeVisible();

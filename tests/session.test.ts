@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session } from '../server/session.ts';
-import { CI_CONSOLE, STATIONS } from '../src/lib/shared.ts';
+import { CI_CONSOLE, STATIONS, EXITS, pageAt } from '../src/lib/shared.ts';
 import { CI_REPAIR } from '../src/lib/tasks.ts';
 
 function setup(count = 4) {
@@ -36,6 +36,38 @@ function repairAction(room: Session) {
     answer: CI_REPAIR.steps[repair.step].answer
   };
 }
+
+test('server movement crosses every page doorway and returns without teleporting', () => {
+  const room = setup();
+  const person = room.players[0];
+  let now = 4000;
+  for (const exit of EXITS.filter((exit) => exit.from === 'centre')) {
+    const sign = exit.to === 'north' || exit.to === 'west' ? -1 : 1;
+    const dx = exit.vertical ? sign : 0;
+    const dy = exit.vertical ? 0 : sign;
+    person.x = exit.x - dx * 5;
+    person.y = exit.y - dy * 5;
+    room.action(person.id, { type: 'move', dx, dy }, (now += 100));
+    assert.equal(pageAt(person)?.id, exit.to);
+    room.action(person.id, { type: 'move', dx: -dx, dy: -dy }, (now += 100));
+    assert.equal(pageAt(person)?.id, 'centre');
+  }
+});
+
+test('players on opposite sides of a page edge cannot see or train each other', () => {
+  const room = setup();
+  const tester = room.players.find((p) => p.role === 'tester')!;
+  const dev = room.players.find((p) => p.role === 'dev')!;
+  Object.assign(tester, { x: 995, y: 310 });
+  Object.assign(dev, { x: 1005, y: 310 });
+  const hidden = room.snapshot(tester.id, 30000).players.find((p) => p.id === dev.id)!;
+  assert.equal(hidden.visible, false);
+  assert.equal(hidden.x, 0);
+  assert.throws(
+    () => room.action(tester.id, { type: 'sideline', target: dev.id }, 30000),
+    /unavailable/
+  );
+});
 function finishRepair(room: Session, id: string, now: number) {
   while (room.incident) room.action(id, repairAction(room), now);
 }
@@ -90,8 +122,8 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   const tester = room.players.find((p) => p.role === 'tester')!;
   const dev = room.players.find((p) => p.role === 'dev')!;
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /closer/);
-  dev.x = 160;
-  dev.y = 130;
+  dev.x = STATIONS[0].x;
+  dev.y = STATIONS[0].y;
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge', 'wrong'), 30000), /refinement/);
   room.action(tester.id, { type: 'sabotage' }, 30000);
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /Repair/);
@@ -111,8 +143,8 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
     finishRepair(room, dev.id, now);
     assert.equal(room.incident, false);
   }
-  tester.x = 160;
-  tester.y = 130;
+  tester.x = STATIONS[0].x;
+  tester.y = STATIONS[0].y;
   finishTask(room, tester, 'merge');
   assert.equal(room.snapshot(dev.id).progress, 0);
   for (const person of room.players.filter((p) => p.role === 'dev'))
@@ -293,16 +325,16 @@ test('training requires the tester and cooldown; trainees can still work', () =>
   room.action(tester.id, { type: 'sideline', target: dev.id }, 30000);
   assert.equal(dev.active, false);
   assert.throws(() => room.action(dev.id, { type: 'meeting' }, 30000), /training/);
-  dev.x = 160;
-  dev.y = 130;
+  dev.x = STATIONS[0].x;
+  dev.y = STATIONS[0].y;
   finishTask(room, dev, 'merge');
   assert.equal(dev.completed.length, 1);
 });
 test('task steps reject forged instances and out-of-order steps, persist, and stay private', () => {
   const room = setup();
   const [person, other] = room.players;
-  person.x = 160;
-  person.y = 130;
+  person.x = STATIONS[0].x;
+  person.y = STATIONS[0].y;
   const first = taskAction(person, 'merge');
   assert.throws(
     () => room.action(person.id, { ...first, puzzle: other.puzzles.merge.id }, 30000),

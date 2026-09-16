@@ -45,9 +45,10 @@ test('the tester can send a nearby colleague on training with T when ready', asy
       await expect(page.locator('.role-tag')).not.toContainText('ON TRAINING');
 
     const nearbyDevIndex = testerIndex < 2 ? testerIndex + 1 : testerIndex - 1;
-    await Promise.all([testerPage.keyboard.down('w'), pages[nearbyDevIndex].keyboard.down('w')]);
+    // Use the open area south of standup, away from the CI interaction zone.
+    await Promise.all([testerPage.keyboard.down('s'), pages[nearbyDevIndex].keyboard.down('s')]);
     await testerPage.waitForTimeout(700);
-    await Promise.all([testerPage.keyboard.up('w'), pages[nearbyDevIndex].keyboard.up('w')]);
+    await Promise.all([testerPage.keyboard.up('s'), pages[nearbyDevIndex].keyboard.up('s')]);
     await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toBeVisible();
 

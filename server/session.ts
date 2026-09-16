@@ -5,6 +5,7 @@ import {
   STATIONS,
   atCiConsole,
   walkable,
+  pageAt,
   type Action,
   type Person,
   type Role,
@@ -172,6 +173,7 @@ export class Session {
       this.end('tester', 'Too few devs remain. The release has been postponed indefinitely.');
   }
   nearby(a: { x: number; y: number }, b: { x: number; y: number }, distance = 80) {
+    if (pageAt(a)?.id !== pageAt(b)?.id) return false;
     if (Math.hypot(a.x - b.x, a.y - b.y) > distance) return false;
     for (let i = 1; i < 20; i++)
       if (!walkable(a.x + ((b.x - a.x) * i) / 20, a.y + ((b.y - a.y) * i) / 20)) return false;

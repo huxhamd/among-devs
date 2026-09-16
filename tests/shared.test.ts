@@ -1,7 +1,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nearestWithin } from '../src/lib/shared.ts';
+import {
+  nearestWithin,
+  PAGES,
+  STATIONS,
+  EXITS,
+  pageAt,
+  walkable,
+  atCiConsole
+} from '../src/lib/shared.ts';
 import { PositionInterpolator } from '../src/lib/interpolation.ts';
+
+test('five pages have reachable workstations and paired unobstructed exits', () => {
+  assert.equal(atCiConsole({ x: 500, y: -25 }), false, 'CI cannot be used from the north page');
+  assert.equal(atCiConsole({ x: 500, y: 100 }), true);
+  assert.equal(PAGES.length, 5);
+  assert.equal(new Set(STATIONS.map((station) => pageAt(station)?.id)).size, 4);
+  for (const exit of EXITS) {
+    assert.ok(
+      EXITS.some(
+        (other) =>
+          other.from === exit.to &&
+          other.to === exit.from &&
+          other.x === exit.x &&
+          other.y === exit.y
+      )
+    );
+    for (const offset of [-30, -10, 0, 10, 30]) {
+      assert.ok(
+        walkable(exit.x + (exit.vertical ? offset : 0), exit.y + (exit.vertical ? 0 : offset))
+      );
+    }
+  }
+  const queue = [{ x: 500, y: 310 }];
+  const visited = new Set(['500,310']);
+  for (let i = 0; i < queue.length; i++) {
+    const p = queue[i];
+    for (const [dx, dy] of [
+      [10, 0],
+      [-10, 0],
+      [0, 10],
+      [0, -10]
+    ]) {
+      const x = p.x + dx,
+        y = p.y + dy,
+        key = `${x},${y}`;
+      if (!visited.has(key) && walkable(x, y)) {
+        visited.add(key);
+        queue.push({ x, y });
+      }
+    }
+  }
+  for (const station of STATIONS) assert.ok(visited.has(`${station.x},${station.y}`), station.id);
+  assert.equal(walkable(-500, -310), false, 'missing corners are outside the office');
+  assert.equal(walkable(500, -615), false, 'outer walls stop movement');
+});
 
 test('nearest player detection prefers proximity over roster order', () => {
   const player = { id: 'A', x: 515, y: 280 };
