@@ -32,7 +32,7 @@ export const ACCESS_SPAWNS = [
   { id: 'access-south-bottom', x: 250, y: 1160 },
   { id: 'access-east-top', x: 1150, y: 190 },
   { id: 'access-east-bottom', x: 1820, y: 480 },
-  { id: 'access-west-top', x: -450, y: 80 },
+  { id: 'access-west-top', x: -450, y: 110 },
   { id: 'access-west-bottom', x: -850, y: 480 }
 ] as const;
 export type AccessPanel = { id: string; x: number; y: number; open: boolean };
