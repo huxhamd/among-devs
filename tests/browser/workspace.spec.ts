@@ -172,7 +172,31 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
     const repairDialog = repairPage.getByRole('dialog', { name: 'Repair CI', exact: true });
-    await expect(repairDialog.locator('.recovery-count')).toHaveText('0/3 stages resolved');
+    await expect(repairDialog.locator('.task-instructions')).toHaveText(
+      'Read the incident clues. Select a recovery action, then select its destination on the board, or drag it there. Recover from left to right; everyone shares this board.'
+    );
+    await expect(repairDialog.locator('.incident-workbench')).toBeVisible();
+    await expect(repairDialog.locator('.recovery-count')).toHaveText('0 / 3 stages resolved');
+    await expect(repairDialog.locator('.progress-segments .resolved')).toHaveCount(0);
+    await repairPage.setViewportSize({ width: 1366, height: 768 });
+    const incidentScrolling = await repairPage.evaluate(() => {
+      const backdrop = document.querySelector('.modal-backdrop')!;
+      const modal = document.querySelector('.modal')!;
+      return {
+        html: getComputedStyle(document.documentElement).overflowY,
+        body: getComputedStyle(document.body).overflowY,
+        modal: getComputedStyle(modal).overflowY,
+        backdropFits: backdrop.scrollHeight <= backdrop.clientHeight + 1
+      };
+    });
+    expect(incidentScrolling).toEqual({
+      html: 'hidden',
+      body: 'hidden',
+      modal: 'auto',
+      backdropFits: true
+    });
+    await expect(repairDialog).toBeInViewport({ ratio: 1 });
+    await repairPage.setViewportSize({ width: 1440, height: 1000 });
     await expect(repairDialog.getByRole('button', { name: 'Apply setting' })).toHaveCount(0);
     await repairDialog.getByRole('button', { name: 'Run health check', exact: true }).click();
     await repairDialog
@@ -210,8 +234,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
       }
       if (index < 2) {
         await expect(repairDialog.locator('.recovery-count')).toHaveText(
-          `${index + 1}/3 stages resolved`
+          `${index + 1} / 3 stages resolved`
         );
+        await expect(repairDialog.locator('.progress-segments .resolved')).toHaveCount(index + 1);
         for (const page of pages)
           await expect(page.locator('.ci-banner .outage')).toContainText(
             `${index + 1}/3 repair steps saved`
@@ -222,13 +247,13 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
         await repairPage.keyboard.press('Escape');
         await expect(repairDialog).toBeHidden();
         await repairPage.getByRole('button', { name: 'Repair CI · E', exact: true }).click();
-        await expect(repairDialog.locator('.recovery-count')).toHaveText('1/3 stages resolved');
+        await expect(repairDialog.locator('.recovery-count')).toHaveText('1 / 3 stages resolved');
         await repairPage.reload();
         await expect(
           repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
         ).toBeVisible();
         await repairPage.keyboard.press('e');
-        await expect(repairDialog.locator('.recovery-count')).toHaveText('1/3 stages resolved');
+        await expect(repairDialog.locator('.recovery-count')).toHaveText('1 / 3 stages resolved');
         await testerPage.keyboard.down('w');
         try {
           await expect(
@@ -242,7 +267,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
           testerPage
             .getByRole('dialog', { name: 'Repair CI', exact: true })
             .locator('.recovery-count')
-        ).toHaveText('1/3 stages resolved');
+        ).toHaveText('1 / 3 stages resolved');
       }
     }
     await expect(repairDialog).toBeHidden();

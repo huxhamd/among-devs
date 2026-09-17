@@ -24,8 +24,11 @@
 <section class="mini-task" aria-label={puzzle.title}>
   <h3>{puzzle.title}</h3>
   {#if puzzle.kind === 'incident'}
+    <p class="task-instructions">{puzzle.instructions}</p>
     {#if current}
-      <IncidentBoard {puzzle} {disabled} {submit} />
+      <section class="task-workbench incident-workbench" aria-label="Incident recovery workbench">
+        <IncidentBoard {puzzle} {disabled} {submit} />
+      </section>
     {/if}
   {:else}
     <p class="task-instructions">{puzzle.instructions}</p>

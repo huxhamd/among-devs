@@ -1153,8 +1153,15 @@ kbd {
   .modal.workstation-modal {
     padding: 24px 28px;
   }
+  .modal.incident-modal {
+    padding: 22px 26px;
+  }
   .modal.workstation-modal h2 {
     margin: 10px 0;
+    font-size: 26px;
+  }
+  .modal.incident-modal h2 {
+    margin: 8px 0;
     font-size: 26px;
   }
 }

@@ -36,6 +36,21 @@
 </script>
 
 <div class="incident-board" aria-label="Shared incident board" aria-busy={disabled}>
+  <div
+    class="recovery-progress"
+    role="status"
+    aria-label={`Recovery progress: ${puzzle.step} of ${puzzle.steps.length} stages resolved`}
+  >
+    <div class="recovery-progress-copy">
+      <strong>Recovery progress</strong>
+      <span class="recovery-count">{puzzle.step} / {puzzle.steps.length} stages resolved</span>
+    </div>
+    <div class="progress-segments" aria-hidden="true">
+      {#each puzzle.steps as _, index}
+        <span class:resolved={index < puzzle.step}></span>
+      {/each}
+    </div>
+  </div>
   <p class="diagnostic">
     <strong>Deployment failed at Deploy.</strong> Recover the stages below in order.
   </p>
@@ -65,7 +80,8 @@
       </li>
     </ol>
   </section>
-  <div class="actions" role="group" aria-label="Recovery actions">
+  <div class="section-label" id="recovery-actions-label">Recovery actions</div>
+  <div class="actions" role="group" aria-labelledby="recovery-actions-label">
     {#each puzzle.steps[0].options as action}
       <button
         class="secondary"
@@ -83,7 +99,8 @@
       >
     {/each}
   </div>
-  <div class="stages">
+  <div class="section-label" id="recovery-stages-label">Recovery stages</div>
+  <div class="stages" role="group" aria-labelledby="recovery-stages-label">
     {#each puzzle.steps as stage, index}
       <button
         class="stage"
@@ -124,21 +141,6 @@
       </button>
     {/each}
   </div>
-  <div
-    class="recovery-progress"
-    role="status"
-    aria-label={`Recovery progress: ${puzzle.step} of ${puzzle.steps.length} stages resolved`}
-  >
-    <div class="recovery-progress-copy">
-      <strong>Recovery progress</strong>
-      <span class="recovery-count">{puzzle.step}/{puzzle.steps.length} stages resolved</span>
-    </div>
-    <div class="progress-segments" aria-hidden="true">
-      {#each puzzle.steps as _, index}
-        <span class:resolved={index < puzzle.step} class:current={index === puzzle.step}></span>
-      {/each}
-    </div>
-  </div>
   <p class="hint" role="status">
     {disabled
       ? 'Checking recovery…'
@@ -146,12 +148,11 @@
         ? `${selected} selected. Choose its destination.`
         : 'Any active colleague can place the next action. Health verification restores CI.'}
   </p>
-  <p class="instructions">{puzzle.instructions}</p>
 </div>
 
 <style>
   .incident-board {
-    margin-top: 8px;
+    display: grid;
   }
   .section-label {
     margin-bottom: 12px;
@@ -162,7 +163,7 @@
     text-transform: uppercase;
   }
   .pipeline-trace {
-    margin: 18px 0 20px;
+    margin: 0 0 18px;
     padding: 14px 16px 16px;
     border: 1px solid #3e4858;
     border-radius: 8px;
@@ -225,7 +226,7 @@
     color: #fcd34d;
   }
   .diagnostic {
-    margin-top: 6px;
+    margin: 16px 0;
     font-size: 13px;
     color: #c3cbd8;
   }
@@ -236,7 +237,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin: 16px 0;
+    margin: 0 0 18px;
   }
   .actions button {
     font-size: 12px;
@@ -250,6 +251,7 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+    margin-bottom: 16px;
   }
   .stage {
     display: grid;
@@ -292,9 +294,10 @@
   }
   .hint {
     color: #c4b5fd;
+    margin: 0;
   }
   .recovery-progress {
-    margin-top: 18px;
+    margin: 0;
   }
   .recovery-progress-copy {
     display: flex;
@@ -322,18 +325,37 @@
     border-color: #759f8c;
     background: #759f8c;
   }
-  .progress-segments .current {
-    border-color: #c4b5fd;
-    background: #40335b;
-  }
-  .instructions {
-    margin-bottom: 0;
-    color: #929eb0;
-    font-size: 11px;
+  @media (max-height: 820px) {
+    .section-label {
+      margin-bottom: 8px;
+    }
+    .diagnostic {
+      margin: 12px 0;
+    }
+    .pipeline-trace {
+      margin-bottom: 12px;
+      padding: 10px 14px 12px;
+    }
+    .actions {
+      margin-bottom: 12px;
+    }
+    .stages {
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stage {
+      gap: 6px;
+      padding: 10px;
+    }
   }
   @media (max-width: 600px) {
     .stages {
       grid-template-columns: 1fr;
+    }
+    .recovery-progress-copy {
+      align-items: start;
+      flex-direction: column;
+      gap: 3px;
     }
   }
 </style>
