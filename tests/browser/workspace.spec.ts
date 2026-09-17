@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { CI_REPAIR_VARIANTS } from '../../src/lib/tasks.ts';
 
 async function moveAlong(page: Page, axis: 'x' | 'y', target: number) {
   const coordinate = async () => {
@@ -211,6 +212,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(repairDialog.locator('.task-instructions')).toHaveText(
       'Read the incident clues. Select a recovery action, then select its destination on the board, or drag it there. Recover from left to right; everyone shares this board.'
     );
+    const incidentTitle = await repairDialog.locator('h3').innerText();
+    const incident = CI_REPAIR_VARIANTS.find((variant) => variant.title === incidentTitle)!;
+    expect(incident).toBeTruthy();
     await expect(repairDialog.locator('.incident-workbench')).toBeVisible();
     await expect(repairDialog.locator('.recovery-count')).toHaveText('0 / 3 stages resolved');
     await expect(repairDialog.locator('.progress-segments .resolved')).toHaveCount(0);
@@ -234,31 +238,30 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(repairDialog).toBeInViewport({ ratio: 1 });
     await repairPage.setViewportSize({ width: 1440, height: 1000 });
     await expect(repairDialog.getByRole('button', { name: 'Apply setting' })).toHaveCount(0);
-    await repairDialog.getByRole('button', { name: 'Run health check', exact: true }).click();
+    const wrongAction = incident.steps[1].answer;
+    await repairDialog.getByRole('button', { name: wrongAction, exact: true }).click();
     await repairDialog
-      .getByRole('button', { name: 'Place action on Pipeline', exact: true })
+      .getByRole('button', { name: `Place action on ${incident.steps[0].label}`, exact: true })
       .click();
     await expect(repairDialog.getByRole('alert')).toContainText('recovery action will not resolve');
-    await repairDialog.getByRole('button', { name: 'Run health check', exact: true }).click();
+    await repairDialog.getByRole('button', { name: wrongAction, exact: true }).click();
     // Regular snapshots must not clear an action while the player chooses a destination.
     await repairPage.waitForTimeout(350);
     await expect(
-      repairDialog.getByRole('button', { name: 'Run health check', exact: true })
+      repairDialog.getByRole('button', { name: wrongAction, exact: true })
     ).toHaveAttribute('aria-pressed', 'true');
-    await repairDialog.getByRole('button', { name: 'Place action on Health', exact: true }).click();
+    await repairDialog
+      .getByRole('button', { name: `Place action on ${incident.steps[2].label}`, exact: true })
+      .click();
     await expect(repairDialog.getByRole('alert')).toContainText('current stage first');
-    for (const [index, setting] of [
-      'Pause pipeline',
-      'Clear bad deployment',
-      'Run health check'
-    ].entries()) {
+    for (const [index, step] of incident.steps.entries()) {
       const workerDialog =
         index === 0
           ? repairDialog
           : testerPage.getByRole('dialog', { name: 'Repair CI', exact: true });
-      const action = workerDialog.getByRole('button', { name: setting, exact: true });
+      const action = workerDialog.getByRole('button', { name: step.answer, exact: true });
       const destination = workerDialog.getByRole('button', {
-        name: `Place action on ${['Pipeline', 'Deployment', 'Health'][index]}`,
+        name: `Place action on ${step.label}`,
         exact: true
       });
       if (index === 1) await action.dragTo(destination);

@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session } from '../server/session.ts';
 import { CI_CONSOLE, STATIONS, EXITS, playerStartPositions, pageAt } from '../src/lib/shared.ts';
-import { CI_REPAIR } from '../src/lib/tasks.ts';
 
 function setup(count = 4) {
   const room = new Session('ABC234');
@@ -33,7 +32,7 @@ function repairAction(room: Session) {
     type: 'repair' as const,
     puzzle: repair.id,
     step: repair.step,
-    answer: CI_REPAIR.steps[repair.step].answer
+    answer: repair.definition.steps[repair.step].answer
   };
 }
 

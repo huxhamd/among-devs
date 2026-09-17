@@ -1,6 +1,11 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { canSee } from '../src/lib/visibility.ts';
-import { CI_REPAIR, TASK_VARIANTS, taskView, type TaskDefinition } from '../src/lib/tasks.ts';
+import {
+  CI_REPAIR_VARIANTS,
+  TASK_VARIANTS,
+  taskView,
+  type TaskDefinition
+} from '../src/lib/tasks.ts';
 import {
   COLORS,
   ACCESS_DURATION,
@@ -34,6 +39,22 @@ const ROLE_REVEAL_DURATION = 3_000;
 const SPRINT_DURATION = 240_000;
 const SABOTAGE_COOLDOWN = 45_000;
 
+function shuffledOrder(length: number) {
+  const order = Array.from({ length }, (_, index) => index);
+  for (let index = order.length - 1; index > 0; index--) {
+    const swap = randomInt(index + 1);
+    [order[index], order[swap]] = [order[swap], order[index]];
+  }
+  return order;
+}
+
+type PuzzleState = {
+  id: string;
+  definition: TaskDefinition;
+  step: number;
+  order: number[];
+};
+
 type Member = Omit<Person, 'visible'> & {
   access: AccessUse | null;
   cupboard: CupboardUse | null;
@@ -41,10 +62,7 @@ type Member = Omit<Person, 'visible'> & {
   socket: string | null;
   role: Role;
   tasks: string[];
-  puzzles: Record<
-    string,
-    { id: string; definition: TaskDefinition; step: number; order: number[] }
-  >;
+  puzzles: Record<string, PuzzleState>;
   completed: string[];
   cooldown: number;
   lastMove: number;
@@ -62,7 +80,7 @@ export class Session {
   roleRevealDeadline = 0;
   deadline = 0;
   incident = false;
-  repair: { id: string; step: number } | null = null;
+  repair: PuzzleState | null = null;
   sabotageReady = 0;
   meeting: {
     caller: string;
@@ -162,11 +180,7 @@ export class Session {
       p.puzzles = Object.fromEntries(
         STATIONS.map((station) => {
           const variants = TASK_VARIANTS[station.id];
-          const order = [0, 1, 2, 3];
-          for (let j = order.length - 1; j > 0; j--) {
-            const k = randomInt(j + 1);
-            [order[j], order[k]] = [order[k], order[j]];
-          }
+          const order = shuffledOrder(4);
           return [
             station.id,
             { id: randomUUID(), definition: variants[randomInt(variants.length)], step: 0, order }
@@ -394,7 +408,13 @@ export class Session {
       if (p.role !== 'tester' || this.incident || now < this.sabotageReady)
         throw new Error('The pipeline is not ready for another incident.');
       this.incident = true;
-      this.repair = { id: randomUUID(), step: 0 };
+      const definition = CI_REPAIR_VARIANTS[randomInt(CI_REPAIR_VARIANTS.length)];
+      this.repair = {
+        id: randomUUID(),
+        definition,
+        step: 0,
+        order: shuffledOrder(definition.steps.length)
+      };
       return;
     }
     if (action.type === 'repair') {
@@ -413,15 +433,13 @@ export class Session {
         throw new Error('Reopen CI repair to load the current incident.');
       if (action.step < repair.step) return;
       if (action.step !== repair.step)
-        throw new Error(
-          'Resolve the current stage first: pause the pipeline before clearing the deployment, then check health.'
-        );
-      if (CI_REPAIR.steps[repair.step].answer !== action.answer)
+        throw new Error('Resolve the current stage first; recovery runs from left to right.');
+      if (repair.definition.steps[repair.step].answer !== action.answer)
         throw new Error(
           'That recovery action will not resolve this stage. Read its incident clue and try again.'
         );
       repair.step++;
-      if (repair.step === CI_REPAIR.steps.length) {
+      if (repair.step === repair.definition.steps.length) {
         this.incident = false;
         this.repair = null;
         this.sabotageReady = now + SABOTAGE_COOLDOWN;
@@ -642,7 +660,9 @@ export class Session {
       cooldown: me.cooldown,
       sabotageReady: this.sabotageReady,
       incident: this.incident,
-      repair: this.repair ? taskView(CI_REPAIR, this.repair.id, this.repair.step, [0, 1, 2]) : null,
+      repair: this.repair
+        ? taskView(this.repair.definition, this.repair.id, this.repair.step, this.repair.order)
+        : null,
       meetingsLeft: me.meetings,
       meeting: this.meeting
         ? {

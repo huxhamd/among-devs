@@ -1772,9 +1772,10 @@
         repaired before breaking it again. Press <b>T</b> to send a nearby colleague on training
         every 30 seconds. To repair CI, go to the CI Control Console at the top of the central
         office, press <b>E</b>, and complete the three shared stages on the shared incident board.
-        Select a recovery action and its destination, or drag it onto the board: pause the pipeline,
-        clear the bad deployment, then check health. Any active colleague, including the tester,
-        can help; trainees cannot. Repairs do not close tickets. The tester can also press
+        Select a recovery action and its destination, or drag it onto the board. Each breakdown has
+        its own three-stage runbook, and the incident clues reveal the safe recovery order. Any
+        active colleague, including the tester, can help; trainees cannot. Repairs do not close
+        tickets. The tester can also press
         <b>E</b> at that console to break CI. The Server Cupboard’s restart task is a separate ticket.
         With three people, the tester’s training action is disabled.
       </p>

@@ -14,13 +14,10 @@
   let hover = $state(-1);
   let incidentId = $derived(puzzle.id);
   let progress = $derived(puzzle.step);
-  const clues = [
-    'New jobs keep sending the broken release. Stop incoming work first.',
-    'The failed release is still deployed. Remove it once incoming work has stopped.',
-    'Service recovery is unverified. Test it after removing the failed release.'
-  ];
-  const recovered = ['Pipeline paused', 'Bad deployment cleared', 'Health verified'];
-  const actions = ['Pause pipeline', 'Clear bad deployment', 'Run health check'];
+  let actions = $derived(puzzle.steps[0]?.options ?? []);
+  let completedActions = $derived(
+    new Set(puzzle.steps.slice(0, puzzle.step).flatMap((step) => step.completedAction ?? []))
+  );
   $effect(() => {
     incidentId;
     progress;
@@ -52,7 +49,7 @@
     </div>
   </div>
   <p class="diagnostic">
-    <strong>Deployment failed at Deploy.</strong> Recover the stages below in order.
+    <strong>{puzzle.title}.</strong> Recover the stages below in order.
   </p>
   <section class="pipeline-trace" aria-labelledby="pipeline-status-label">
     <div class="section-label" id="pipeline-status-label">Pipeline status</div>
@@ -85,8 +82,8 @@
     {#each puzzle.steps[0].options as action}
       <button
         class="secondary"
-        draggable={!disabled && actions.indexOf(action) >= puzzle.step}
-        disabled={disabled || actions.indexOf(action) < puzzle.step}
+        draggable={!disabled && !completedActions.has(action)}
+        disabled={disabled || completedActions.has(action)}
         aria-pressed={selected === action}
         onclick={() => (selected = selected === action ? '' : action)}
         ondragstart={(event) => {
@@ -94,8 +91,7 @@
           event.dataTransfer?.setData('text/plain', action);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
         }}
-        ondragend={() => (hover = -1)}
-        >{action}{actions.indexOf(action) < puzzle.step ? ' ✓' : ''}</button
+        ondragend={() => (hover = -1)}>{action}{completedActions.has(action) ? ' ✓' : ''}</button
       >
     {/each}
   </div>
@@ -123,10 +119,10 @@
         }}
       >
         <strong>{index + 1}. {stage.label}</strong>
-        <span class="clue">{clues[index]}</span>
+        <span class="clue">{stage.clue}</span>
         <span class="slot"
           >{index < puzzle.step
-            ? `✓ ${recovered[index]}`
+            ? `✓ ${stage.recovered}`
             : selected
               ? `Place: ${selected}`
               : 'Select or drop recovery action'}</span
@@ -146,7 +142,7 @@
       ? 'Checking recovery…'
       : selected
         ? `${selected} selected. Choose its destination.`
-        : 'Any active colleague can place the next action. Health verification restores CI.'}
+        : 'Any active colleague can place the next action. Final verification restores CI.'}
   </p>
 </div>
 
