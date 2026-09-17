@@ -32,6 +32,7 @@ import {
 
 const ROLE_REVEAL_DURATION = 3_000;
 const SPRINT_DURATION = 240_000;
+const SABOTAGE_COOLDOWN = 45_000;
 
 type Member = Omit<Person, 'visible'> & {
   access: AccessUse | null;
@@ -394,7 +395,6 @@ export class Session {
         throw new Error('The pipeline is not ready for another incident.');
       this.incident = true;
       this.repair = { id: randomUUID(), step: 0 };
-      this.sabotageReady = now + 45_000;
       return;
     }
     if (action.type === 'repair') {
@@ -424,6 +424,7 @@ export class Session {
       if (repair.step === CI_REPAIR.steps.length) {
         this.incident = false;
         this.repair = null;
+        this.sabotageReady = now + SABOTAGE_COOLDOWN;
       }
       return;
     }

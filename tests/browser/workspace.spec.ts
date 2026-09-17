@@ -178,6 +178,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(breakCiButton).toHaveText('Break CI • B');
     await testerPage.keyboard.press('b');
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
+    await expect(breakCiButton).toHaveText('Repair CI before breaking it again');
     await testerPage.keyboard.press('b');
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
     await expect(ciBanner).toHaveClass(/offline/);
@@ -319,6 +320,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     ).toBeVisible();
     await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
     await expect(breakCiButton).toBeDisabled();
+    await expect(breakCiButton).toContainText('Break CI ready in');
     await testerPage.keyboard.press('b');
     await expect(
       repairPage.locator('.map-panel').getByText('CI operational', { exact: true })

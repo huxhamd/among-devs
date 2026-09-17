@@ -137,7 +137,9 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
   dev.x = STATIONS[0].x;
   dev.y = STATIONS[0].y;
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge', 'wrong'), 30000), /refinement/);
+  const readyBeforeOutage = room.sabotageReady;
   room.action(tester.id, { type: 'sabotage' }, 30000);
+  assert.equal(room.sabotageReady, readyBeforeOutage);
   assert.throws(() => room.action(dev.id, taskAction(dev, 'merge'), 30000), /Repair/);
   dev.x = 840;
   assert.throws(() => room.action(dev.id, repairAction(room), 30000), /CI Control Console/);
@@ -210,6 +212,7 @@ test('CI repair is shared by active devs and testers, rejects stale steps, and n
   const final = repairAction(room);
   room.action(devs[1].id, final, 79000);
   assert.equal(room.incident, false);
+  assert.equal(room.sabotageReady, 124000);
   assert.equal(room.snapshot(tester.id).repair, null);
   assert.equal(room.snapshot(tester.id).progress, 0);
   assert.ok(room.players.every((p) => p.completed.length === 0));

@@ -1595,9 +1595,11 @@
                     class="sabotage wide"
                     disabled={interactionLocked || session.incident || sabotageCooldown > 0}
                     onclick={() => act({ type: 'sabotage' })}
-                    >{sabotageCooldown
-                      ? `Break CI ready in ${sabotageCooldown}s`
-                      : 'Break CI • B'}</button
+                    >{session.incident
+                      ? 'Repair CI before breaking it again'
+                      : sabotageCooldown
+                        ? `Break CI ready in ${sabotageCooldown}s`
+                        : 'Break CI • B'}</button
                   >{#if session.players.length > 3}<button
                       class="sabotage wide"
                       disabled={!target || cooldown > 0}
@@ -1766,13 +1768,13 @@
         on a ticket.
       </p>
       <p>
-        The tester can press <b>B</b> anywhere to break CI every 45 seconds and press <b>T</b> to
-        send a nearby colleague on training every 30 seconds. To repair CI, go to the CI Control
-        Console at the top of the central office, press <b>E</b>, and complete the three shared
-        stages on the shared incident board. Select a recovery action and its destination, or drag
-        it onto the board: pause the pipeline, clear the bad deployment, then check health. Any
-        active colleague, including the tester, can help; trainees cannot. Repairs do not close
-        tickets. The tester can also press
+        The tester can press <b>B</b> anywhere to break CI, then must wait 45 seconds after it is
+        repaired before breaking it again. Press <b>T</b> to send a nearby colleague on training
+        every 30 seconds. To repair CI, go to the CI Control Console at the top of the central
+        office, press <b>E</b>, and complete the three shared stages on the shared incident board.
+        Select a recovery action and its destination, or drag it onto the board: pause the pipeline,
+        clear the bad deployment, then check health. Any active colleague, including the tester,
+        can help; trainees cannot. Repairs do not close tickets. The tester can also press
         <b>E</b> at that console to break CI. The Server Cupboard’s restart task is a separate ticket.
         With three people, the tester’s training action is disabled.
       </p>
