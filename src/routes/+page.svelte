@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import MiniTask from '$lib/MiniTask.svelte';
   import OfficeFixture from '$lib/OfficeFixture.svelte';
+  import DestinationMarker from '$lib/DestinationMarker.svelte';
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
@@ -1028,6 +1029,17 @@
                     >{currentPage.name.toUpperCase()}</text
                   >
                   {#if currentPage.id === 'centre'}
+                    <DestinationMarker
+                      kind="ci"
+                      x={CI_CONSOLE.x}
+                      baseY={CI_CONSOLE.y + 53}
+                      iconY={CI_CONSOLE.y + 51}
+                      baseWidth={240}
+                      active={session.incident}
+                      urgent={session.incident}
+                      muted={!session.incident}
+                      showIcon={!atConsole}
+                    />
                     <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
                       <rect
                         x={-CI_CONSOLE.width / 2}
@@ -1099,6 +1111,18 @@
                         >
                       {/if}
                     </g>
+                    {#if session.meetingsLeft}
+                      <DestinationMarker
+                        kind="standup"
+                        x={500}
+                        baseY={342}
+                        iconY={252}
+                        baseWidth={150}
+                        active={!session.incident && !!me?.active}
+                        muted={session.incident || !me?.active}
+                        showIcon={!atTable}
+                      />
+                    {/if}
                     <rect
                       x="442"
                       y="270"
@@ -1131,7 +1155,18 @@
                     {/if}
                   {/if}
                   {#each STATIONS.filter((item) => pageAt(item)?.id === currentPage.id) as item}<g
-                      ><rect
+                      >{#if !session.completed.includes(item.id)}
+                        <DestinationMarker
+                          kind="workstation"
+                          x={item.x}
+                          baseY={item.y + 24}
+                          iconY={item.y - 50}
+                          baseWidth={136}
+                          active={!session.incident}
+                          muted={session.incident}
+                          showIcon={nearby?.id !== item.id}
+                        />
+                      {/if}<rect
                         x={item.x - 55}
                         y={item.y - 25}
                         width="110"
