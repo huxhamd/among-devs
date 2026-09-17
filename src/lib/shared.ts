@@ -208,6 +208,10 @@ export const OFFICE_ZONES = PAGES.flatMap((page) =>
 // Low furniture stops feet, but only walls and tall shelving stop sight and light.
 export const MOVEMENT_BLOCKERS = [...WALLS, ...FIXTURES.filter((fixture) => fixture.blocking)];
 export const SIGHT_BLOCKERS = [...WALLS, ...FIXTURES.filter((fixture) => fixture.opaque)];
+// These cast a visual penumbra without changing server-authoritative sight.
+export const PARTIAL_LIGHT_BLOCKERS = FIXTURES.filter(
+  (fixture) => fixture.blocking && !fixture.opaque
+);
 export type Phase = 'lobby' | 'role-reveal' | 'work' | 'meeting' | 'meeting-result' | 'ended';
 export type Role = 'dev' | 'tester';
 export type Person = {
@@ -253,6 +257,7 @@ export type Snapshot = {
     continues: boolean;
   } | null;
   result: string;
+  testerName: string | null;
   winner: Role | null;
 };
 export type Action =

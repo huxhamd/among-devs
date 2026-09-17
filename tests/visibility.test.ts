@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PAGES, VISIBILITY_RADIUS, pageAt, walkable } from '../src/lib/shared.ts';
-import { canSee, lightPolygon } from '../src/lib/visibility.ts';
+import {
+  PAGES,
+  PARTIAL_LIGHT_BLOCKERS,
+  VISIBILITY_RADIUS,
+  pageAt,
+  walkable
+} from '../src/lib/shared.ts';
+import { canSee, lightPolygon, partialShadowPolygons } from '../src/lib/visibility.ts';
 
 type Point = { x: number; y: number };
 function insidePolygon(point: Point, polygon: Point[]) {
@@ -18,6 +24,19 @@ function insidePolygon(point: Point, polygon: Point[]) {
   return inside;
 }
 
+function distanceToSegment(point: Point, start: Point, end: Point) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const along = lengthSquared
+    ? Math.max(
+        0,
+        Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared)
+      )
+    : 0;
+  return Math.hypot(point.x - (start.x + along * dx), point.y - (start.y + along * dy));
+}
+
 test('sight stops at actual walls, but passes clear corners without a collision buffer', () => {
   assert.equal(canSee({ x: 290, y: 100 }, { x: 355, y: 100 }), false);
   assert.equal(canSee({ x: 290, y: 195 }, { x: 355, y: 195 }), true);
@@ -31,10 +50,27 @@ test('sight stops at actual walls, but passes clear corners without a collision 
 test('low desks block movement only; tall bookcases block sight and light', () => {
   assert.equal(walkable(130, 215), false);
   assert.equal(canSee({ x: 60, y: 215 }, { x: 215, y: 215 }), true);
+  assert.ok(PARTIAL_LIGHT_BLOCKERS.some((fixture) => fixture.kind === 'desk'));
+  assert.equal(
+    PARTIAL_LIGHT_BLOCKERS.some((fixture) => fixture.kind === 'bookcase'),
+    false
+  );
+  assert.ok(partialShadowPolygons({ x: 60, y: 215 }).length > 0);
   const origin = { x: 900, y: 45 },
     target = { x: 900, y: 145 };
   assert.equal(canSee(origin, target), false);
   assert.equal(insidePolygon(target, lightPolygon(origin)), false);
+});
+
+test('wide partial shadows extend beyond the visibility radius', () => {
+  // Pressed against the centre of the kitchen island's long edge.
+  const origin = { x: 470, y: 944 };
+  const shadows = partialShadowPolygons(origin);
+  assert.ok(shadows.length > 0);
+  for (const shadow of shadows) {
+    const farEdgeDistance = distanceToSegment(origin, shadow[2], shadow[3]);
+    assert.ok(farEdgeDistance > VISIBILITY_RADIUS, `${farEdgeDistance}`);
+  }
 });
 
 test('light and server sight agree across partitions, doorways and all five pages', () => {

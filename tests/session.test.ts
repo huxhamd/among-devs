@@ -90,6 +90,7 @@ test('exactly one tester; snapshots do not disclose credentials or other roles',
     assert.equal('socket' in person, false);
   }
   assert.equal(snapshot.total, 36);
+  assert.equal(snapshot.testerName, null);
 });
 test('starting a sprint reveals roles for three seconds before work begins', () => {
   const room = new Session('ABC234');
@@ -156,7 +157,10 @@ test('task proximity, answers, deduplication, sabotage and dev victory', () => {
         room.action(person.id, { ...taskAction(person, station.id), step: 0 }, 30000);
     }
   assert.equal(room.winner, 'dev');
-  assert.equal(room.snapshot(dev.id).progress, 12);
+  const snapshot = room.snapshot(dev.id);
+  assert.equal(snapshot.progress, 12);
+  assert.equal(snapshot.result, 'All tickets closed. Somehow, this actually shipped.');
+  assert.equal(snapshot.testerName, tester.name);
 });
 test('CI repair is shared by active devs and testers, rejects stale steps, and never closes tickets', () => {
   const room = setup(5);

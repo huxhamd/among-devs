@@ -1,4 +1,11 @@
-import { HEIGHT, WIDTH, SIGHT_BLOCKERS, VISIBILITY_RADIUS, pageAt } from './shared.ts';
+import {
+  HEIGHT,
+  WIDTH,
+  PARTIAL_LIGHT_BLOCKERS,
+  SIGHT_BLOCKERS,
+  VISIBILITY_RADIUS,
+  pageAt
+} from './shared.ts';
 
 type Point = { x: number; y: number };
 type Wall = (typeof SIGHT_BLOCKERS)[number];
@@ -76,4 +83,61 @@ export function lightPolygon(origin: Point, radius = VISIBILITY_RADIUS): Point[]
       }
       return { x: origin.x + direction.x * distance, y: origin.y + direction.y * distance };
     });
+}
+
+// Project a soft, visual-only shadow from low furniture. These polygons never
+// participate in canSee(), so players remain visible through every penumbra.
+export function partialShadowPolygons(origin: Point, radius = VISIBILITY_RADIUS): Point[][] {
+  const page = pageAt(origin);
+  if (!page || radius <= 0) return [];
+  return PARTIAL_LIGHT_BLOCKERS.filter((blocker) => {
+    if (pageAt(blocker)?.id !== page.id) return false;
+    const nearestX = Math.max(blocker.x, Math.min(origin.x, blocker.x + blocker.w));
+    const nearestY = Math.max(blocker.y, Math.min(origin.y, blocker.y + blocker.h));
+    return Math.hypot(nearestX - origin.x, nearestY - origin.y) <= radius;
+  }).map((blocker) => {
+    const corners = [
+      { x: blocker.x, y: blocker.y },
+      { x: blocker.x + blocker.w, y: blocker.y },
+      { x: blocker.x + blocker.w, y: blocker.y + blocker.h },
+      { x: blocker.x, y: blocker.y + blocker.h }
+    ];
+    const aroundOrigin = corners
+      .map((point) => ({
+        point,
+        angle: (Math.atan2(point.y - origin.y, point.x - origin.x) + Math.PI * 2) % (Math.PI * 2)
+      }))
+      .sort((a, b) => a.angle - b.angle);
+    let largestGap = -1;
+    let gapStart = 0;
+    for (let index = 0; index < aroundOrigin.length; index++) {
+      const next =
+        index === aroundOrigin.length - 1
+          ? aroundOrigin[0].angle + Math.PI * 2
+          : aroundOrigin[index + 1].angle;
+      const gap = next - aroundOrigin[index].angle;
+      if (gap > largestGap) {
+        largestGap = gap;
+        gapStart = index;
+      }
+    }
+    const first = aroundOrigin[(gapStart + 1) % aroundOrigin.length].point;
+    const last = aroundOrigin[gapStart].point;
+    const shadowAngle = Math.PI * 2 - largestGap;
+    // A fixed projection distance can leave the far chord inside the light circle
+    // when nearby furniture occupies a wide angle. Extend wide shadows further so
+    // clipping always ends them at the visibility radius instead of at that chord.
+    const farDistance =
+      (radius * 1.05) / Math.max(Math.cos(Math.min(shadowAngle, Math.PI) / 2), 0.01);
+    const project = (point: Point): Point => {
+      const dx = point.x - origin.x;
+      const dy = point.y - origin.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      return {
+        x: origin.x + (dx / distance) * farDistance,
+        y: origin.y + (dy / distance) * farDistance
+      };
+    };
+    return [first, last, project(last), project(first)];
+  });
 }

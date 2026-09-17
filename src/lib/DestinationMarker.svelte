@@ -10,7 +10,7 @@
     active = true,
     urgent = false,
     muted = false,
-    showIcon = true
+    focused = false
   }: {
     kind: DestinationKind;
     x: number;
@@ -20,7 +20,7 @@
     active?: boolean;
     urgent?: boolean;
     muted?: boolean;
-    showIcon?: boolean;
+    focused?: boolean;
   } = $props();
 
   const colours: Record<DestinationKind, string> = {
@@ -36,37 +36,30 @@
   class:active
   class:urgent
   class:muted
+  class:focused
   data-destination={kind}
   style={`--destination-accent: ${colour}`}
   pointer-events="none"
   aria-hidden="true"
 >
-  <ellipse
-    class="destination-beacon"
-    cx={x}
-    cy={baseY}
-    rx={baseWidth / 2}
-    ry="16"
-  />
-  {#if showIcon}
-    <g transform={`translate(${x},${iconY})`}>
-      <g class="destination-icon-motion">
-        <path class="destination-pointer" d="M-4 14L0 21L4 14Z" />
-        <circle class="destination-icon-disc" r="16" />
-        {#if kind === 'workstation'}
-          <rect class="destination-icon-line" x="-9" y="-7" width="18" height="12" rx="2" />
-          <path class="destination-icon-line" d="M0 5V9M-6 9H6" />
-        {:else if kind === 'ci'}
-          <text class="destination-icon-text" y="4">CI</text>
-        {:else}
-          <circle class="destination-icon-fill" cx="-6" cy="-4" r="2.5" />
-          <circle class="destination-icon-fill" cy="-6" r="3" />
-          <circle class="destination-icon-fill" cx="6" cy="-4" r="2.5" />
-          <path class="destination-icon-line" d="M-10 7Q-6 2-2 7M-5 8Q0 1 5 8M2 7Q6 2 10 7" />
-        {/if}
-      </g>
+  <ellipse class="destination-beacon" cx={x} cy={baseY} rx={baseWidth / 2} ry="16" />
+  <g transform={`translate(${x},${iconY})`}>
+    <g class="destination-icon-motion">
+      <path class="destination-pointer" d="M-4 14L0 21L4 14Z" />
+      <circle class="destination-icon-disc" r="16" />
+      {#if kind === 'workstation'}
+        <rect class="destination-icon-line" x="-9" y="-7" width="18" height="12" rx="2" />
+        <path class="destination-icon-line" d="M0 5V9M-6 9H6" />
+      {:else if kind === 'ci'}
+        <text class="destination-icon-text" y="4">CI</text>
+      {:else}
+        <circle class="destination-icon-fill" cx="-6" cy="-4" r="2.5" />
+        <circle class="destination-icon-fill" cy="-6" r="3" />
+        <circle class="destination-icon-fill" cx="6" cy="-4" r="2.5" />
+        <path class="destination-icon-line" d="M-10 7Q-6 2-2 7M-5 8Q0 1 5 8M2 7Q6 2 10 7" />
+      {/if}
     </g>
-  {/if}
+  </g>
 </g>
 
 <style>
@@ -85,6 +78,9 @@
     filter: blur(5px);
     transform-box: fill-box;
     transform-origin: center;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease;
   }
 
   .destination-icon-motion {
@@ -92,6 +88,7 @@
     filter: drop-shadow(0 0 5px color-mix(in srgb, var(--destination-accent) 65%, transparent));
     transform-box: fill-box;
     transform-origin: center;
+    transition: opacity 180ms ease;
   }
 
   .destination-marker.active .destination-beacon {
@@ -105,6 +102,21 @@
   .destination-marker.urgent .destination-beacon,
   .destination-marker.urgent .destination-icon-motion {
     animation-duration: 1.45s;
+  }
+
+  .destination-marker.focused {
+    opacity: 1;
+  }
+
+  .destination-marker.focused .destination-beacon {
+    animation: none;
+    opacity: 0.58;
+    transform: scale(1.08);
+  }
+
+  .destination-marker.focused .destination-icon-motion {
+    animation: none;
+    opacity: 0.12;
   }
 
   .destination-pointer {
@@ -163,12 +175,18 @@
 
   @media (prefers-reduced-motion: reduce) {
     .destination-marker.active .destination-beacon,
-    .destination-marker.active .destination-icon-motion {
+    .destination-marker.active .destination-icon-motion,
+    .destination-marker.focused .destination-beacon,
+    .destination-marker.focused .destination-icon-motion {
       animation: none;
     }
 
     .destination-marker.active .destination-beacon {
       opacity: 0.48;
+    }
+
+    .destination-marker.active.focused .destination-beacon {
+      opacity: 0.58;
     }
   }
 </style>

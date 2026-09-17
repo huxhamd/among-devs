@@ -656,10 +656,11 @@ export class Session {
             continues: this.meetingResult.continues
           }
         : null,
-      result:
+      result: this.result,
+      testerName:
         this.phase === 'ended'
-          ? `${this.result} Tester: ${this.players.find((p) => p.role === 'tester')?.name ?? 'unassigned'}.`
-          : this.result,
+          ? (this.players.find((p) => p.role === 'tester')?.name ?? 'Unassigned')
+          : null,
       winner: this.winner
     };
   }

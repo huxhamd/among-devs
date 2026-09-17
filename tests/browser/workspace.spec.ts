@@ -400,6 +400,25 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     });
     for (const page of pages)
       await expect(page.getByText('Against all odds, shipped.')).toBeVisible();
+    await Promise.all(pages.map((page) => page.setViewportSize({ width: 1366, height: 768 })));
+    for (const page of pages) {
+      const result = page.locator('.results');
+      await expect(result).toHaveClass(/dev/);
+      await expect(result.getByRole('heading', { name: 'Dev team wins' })).toBeVisible();
+      await expect(result.locator('.result-icon')).toHaveText('DEV');
+      await expect(result.locator('.tester-reveal')).toContainText(
+        ['Alex', 'Sam', 'Jo'][testerIndex]
+      );
+      expect(
+        await page.evaluate(() => {
+          const workspace = document.querySelector<HTMLElement>('.workspace')!;
+          return {
+            documentFits: document.documentElement.scrollHeight <= window.innerHeight + 1,
+            workspaceFits: workspace.scrollHeight <= workspace.clientHeight + 1
+          };
+        })
+      ).toEqual({ documentFits: true, workspaceFits: true });
+    }
     await pages[0].getByRole('button', { name: 'Back to lobby' }).click();
     for (const page of pages) await expect(page.getByText('The team is assembling.')).toBeVisible();
     expect(errors).toEqual([]);

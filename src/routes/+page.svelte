@@ -6,7 +6,7 @@
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
-  import { canSee, lightPolygon } from '$lib/visibility';
+  import { canSee, lightPolygon, partialShadowPolygons } from '$lib/visibility';
   import {
     CI_CONSOLE,
     CUPBOARD_REACH,
@@ -123,6 +123,13 @@
           .map((point) => `${point.x},${point.y}`)
           .join(' ')
       : ''
+  );
+  let partialShadowPoints = $derived(
+    limitedVision && lightPosition
+      ? partialShadowPolygons(lightPosition, visionRadius).map((polygon) =>
+          polygon.map((point) => `${point.x},${point.y}`).join(' ')
+        )
+      : []
   );
   let repairing = $derived(stationId === 'ci');
   let station = $derived(
@@ -603,7 +610,7 @@
   /></svelte:head
 >
 
-<div class="app-shell" class:in-round={inRound}>
+<div class="app-shell" class:in-round={inRound} class:results-view={session?.phase === 'ended'}>
   <header>
     <a class="brand" href="/" aria-label="Among Devs home"
       ><span class="brand-icon">a<span>.</span></span> among<span class="brand-light">devs</span
@@ -776,19 +783,30 @@
           </aside>
         </div>
       {:else if session.phase === 'ended'}
-        <section class="panel results">
-          <div class="result-icon">
-            {session.winner === 'dev' ? '✓' : session.winner === 'tester' ? '…' : '↻'}
+        <section class={`panel results ${session.winner ?? 'neutral'}`}>
+          <div class="result-icon" aria-hidden="true">
+            {session.winner === 'dev' ? 'DEV' : session.winner === 'tester' ? 'QA' : '↻'}
           </div>
           <div class="eyebrow">SPRINT RETROSPECTIVE</div>
           <h2>
+            {session.winner === 'dev'
+              ? 'Dev team wins'
+              : session.winner === 'tester'
+                ? 'Tester wins'
+                : 'No winner'}
+          </h2>
+          <p class="result-tagline">
             {session.winner === 'dev'
               ? 'Against all odds, shipped.'
               : session.winner === 'tester'
                 ? 'Moved to the next sprint.'
                 : 'Let’s regroup.'}
-          </h2>
-          <p>{session.result}</p>
+          </p>
+          <div class="tester-reveal">
+            <span>THE TESTER WAS</span>
+            <strong>{session.testerName ?? 'Unassigned'}</strong>
+          </div>
+          <p class="result-reason">{session.result}</p>
           <div class="result-stats">
             <span><b>{session.progress}/{session.total}</b> tickets closed</span><span
               ><b>{session.players.length}</b> questionable alibis</span
@@ -996,6 +1014,15 @@
                       letter-spacing="1.5">{zone.label}</text
                     >
                   {/each}
+                  {#if limitedVision}
+                    <g clip-path="url(#visibility-area)" pointer-events="none" aria-hidden="true">
+                      <g clip-path="url(#visibility-radius)">
+                        {#each partialShadowPoints as points}
+                          <polygon class="partial-light-shadow" {points} />
+                        {/each}
+                      </g>
+                    </g>
+                  {/if}
                   {#each FIXTURES.filter((fixture) => pageAt(fixture)?.id === currentPage.id) as fixture (fixture.id)}
                     <OfficeFixture {fixture} />
                   {/each}
@@ -1038,7 +1065,7 @@
                       active={session.incident}
                       urgent={session.incident}
                       muted={!session.incident}
-                      showIcon={!atConsole}
+                      focused={atConsole}
                     />
                     <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
                       <rect
@@ -1083,32 +1110,34 @@
                         >{session.incident ? 'CI DOWN — REPAIR REQUIRED' : 'CI operational'}</text
                       >
                       {#if atConsole && !report && !trainingTarget}
-                        <rect
-                          x="-105"
-                          y="76"
-                          width="210"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke={session.incident
-                            ? me?.active
-                              ? '#c3b6ff'
-                              : '#83909e'
-                            : session.role === 'tester' && me?.active && !sabotageCooldown
-                              ? '#fda4af'
-                              : '#5eead4'}
-                        />
-                        <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
-                          >{session.incident
-                            ? me?.active
-                              ? 'E • Repair CI'
-                              : 'Active colleague required'
-                            : session.role === 'tester' && me?.active
-                              ? sabotageCooldown
-                                ? `Break CI ready in ${sabotageCooldown}s`
-                                : 'E • Break CI'
-                              : 'CI operational ✓'}</text
-                        >
+                        <g class="context-prompt" transition:fade={{ duration: 180 }}>
+                          <rect
+                            x="-105"
+                            y="76"
+                            width="210"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke={session.incident
+                              ? me?.active
+                                ? '#c3b6ff'
+                                : '#83909e'
+                              : session.role === 'tester' && me?.active && !sabotageCooldown
+                                ? '#fda4af'
+                                : '#5eead4'}
+                          />
+                          <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
+                            >{session.incident
+                              ? me?.active
+                                ? 'E • Repair CI'
+                                : 'Active colleague required'
+                              : session.role === 'tester' && me?.active
+                                ? sabotageCooldown
+                                  ? `Break CI ready in ${sabotageCooldown}s`
+                                  : 'E • Break CI'
+                                : 'CI operational ✓'}</text
+                          >
+                        </g>
                       {/if}
                     </g>
                     {#if session.meetingsLeft}
@@ -1120,7 +1149,7 @@
                         baseWidth={150}
                         active={!session.incident && !!me?.active}
                         muted={session.incident || !me?.active}
-                        showIcon={!atTable}
+                        focused={atTable}
                       />
                     {/if}
                     <rect
@@ -1136,22 +1165,24 @@
                       >STANDUP</text
                     >
                     {#if atTable && me?.active && !report && !trainingTarget}
-                      <rect
-                        x="395"
-                        y="364"
-                        width="210"
-                        height="27"
-                        rx="5"
-                        fill="#17212b"
-                        stroke="#c3b6ff"
-                      />
-                      <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
-                        >{!session.meetingsLeft
-                          ? 'No standups remaining'
-                          : session.incident
-                            ? 'CI down — standup blocked'
-                            : 'E • Call standup'}</text
-                      >
+                      <g class="context-prompt" transition:fade={{ duration: 180 }}>
+                        <rect
+                          x="395"
+                          y="364"
+                          width="210"
+                          height="27"
+                          rx="5"
+                          fill="#17212b"
+                          stroke="#c3b6ff"
+                        />
+                        <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
+                          >{!session.meetingsLeft
+                            ? 'No standups remaining'
+                            : session.incident
+                              ? 'CI down — standup blocked'
+                              : 'E • Call standup'}</text
+                        >
+                      </g>
                     {/if}
                   {/if}
                   {#each STATIONS.filter((item) => pageAt(item)?.id === currentPage.id) as item}<g
@@ -1164,7 +1195,7 @@
                           baseWidth={136}
                           active={!session.incident}
                           muted={session.incident}
-                          showIcon={nearby?.id !== item.id}
+                          focused={nearby?.id === item.id}
                         />
                       {/if}<rect
                         x={item.x - 55}
@@ -1190,25 +1221,29 @@
                         text-anchor="middle"
                         fill="#b9c2d1"
                         font-size="12">{item.name}</text
-                      >{#if nearby?.id === item.id && !report && !trainingTarget}<rect
-                          x={item.x - 95}
-                          y={item.y + 68}
-                          width="190"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#c3b6ff"
-                        /><text
-                          x={item.x}
-                          y={item.y + 86}
-                          text-anchor="middle"
-                          fill="#ffffff"
-                          font-size="14"
-                          >{session.completed.includes(item.id)
-                            ? 'Ticket already closed ✓'
-                            : session.incident
-                              ? 'CI down — ticket blocked'
-                              : 'E • Open ticket'}</text
+                      >{#if nearby?.id === item.id && !report && !trainingTarget}<g
+                          class="context-prompt"
+                          transition:fade={{ duration: 180 }}
+                          ><rect
+                            x={item.x - 95}
+                            y={item.y + 68}
+                            width="190"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#c3b6ff"
+                          /><text
+                            x={item.x}
+                            y={item.y + 86}
+                            text-anchor="middle"
+                            fill="#ffffff"
+                            font-size="14"
+                            >{session.completed.includes(item.id)
+                              ? 'Ticket already closed ✓'
+                              : session.incident
+                                ? 'CI down — ticket blocked'
+                                : 'E • Open ticket'}</text
+                          ></g
                         >{/if}</g
                     >{/each}
                   {#each (session.accessPanels ?? []).filter((a) => pageAt(a)?.id === currentPage.id) as panel (panel.id)}
@@ -1248,18 +1283,20 @@
                         >MAINTENANCE</text
                       >
                       {#if nearbyAccess?.id === panel.id}
-                        <rect
-                          x="-98"
-                          y="30"
-                          width="196"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#c6a96c"
-                        />
-                        <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
-                          >E • Use access panel</text
-                        >
+                        <g class="context-prompt" transition:fade={{ duration: 180 }}>
+                          <rect
+                            x="-98"
+                            y="30"
+                            width="196"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#c6a96c"
+                          />
+                          <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
+                            >E • Use access panel</text
+                          >
+                        </g>
                       {/if}
                     </g>
                   {/each}
@@ -1305,18 +1342,20 @@
                         >SUPPLIES</text
                       >
                       {#if nearbyCupboard?.id === cupboard.id}
-                        <rect
-                          x="-104"
-                          y="30"
-                          width="208"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#c3b6ff"
-                        />
-                        <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
-                          >{cupboardPrompt}</text
-                        >
+                        <g class="context-prompt" transition:fade={{ duration: 180 }}>
+                          <rect
+                            x="-104"
+                            y="30"
+                            width="208"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#c3b6ff"
+                          />
+                          <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
+                            >{cupboardPrompt}</text
+                          >
+                        </g>
                       {/if}
                     </g>
                   {/each}
@@ -1403,45 +1442,57 @@
                         stroke-width="3"
                         paint-order="stroke"
                         >{person.name}{person.id === session.self ? ' (you)' : ''}</text
-                      >{#if report?.id === person.id}<rect
-                          x="-105"
-                          y={position.y - currentPage.y > 555 ? -74 : 34}
-                          width="210"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#c3b6ff"
-                        /><text
-                          y={position.y - currentPage.y > 555 ? -56 : 52}
-                          text-anchor="middle"
-                          fill="#ffffff"
-                          font-size="14">E • Report training notice</text
-                        >{:else if trainingTarget?.id === person.id}<rect
-                          x="-105"
-                          y={position.y - currentPage.y > 555 ? -74 : 34}
-                          width="210"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#fda4af"
-                        /><text
-                          y={position.y - currentPage.y > 555 ? -56 : 52}
-                          text-anchor="middle"
-                          fill="#ffffff"
-                          font-size="14">T • Send Dev on training</text
-                        >{:else if trainingCooldownTarget?.id === person.id}<rect
-                          x="-105"
-                          y={position.y - currentPage.y > 555 ? -74 : 34}
-                          width="210"
-                          height="27"
-                          rx="5"
-                          fill="#17212b"
-                          stroke="#83909e"
-                        /><text
-                          y={position.y - currentPage.y > 555 ? -56 : 52}
-                          text-anchor="middle"
-                          fill="#ffffff"
-                          font-size="14">Training ready in {cooldown}s</text
+                      >{#if report?.id === person.id}<g
+                          class="context-prompt"
+                          transition:fade={{ duration: 180 }}
+                          ><rect
+                            x="-105"
+                            y={position.y - currentPage.y > 555 ? -74 : 34}
+                            width="210"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#c3b6ff"
+                          /><text
+                            y={position.y - currentPage.y > 555 ? -56 : 52}
+                            text-anchor="middle"
+                            fill="#ffffff"
+                            font-size="14">E • Report training notice</text
+                          ></g
+                        >{:else if trainingTarget?.id === person.id}<g
+                          class="context-prompt"
+                          transition:fade={{ duration: 180 }}
+                          ><rect
+                            x="-105"
+                            y={position.y - currentPage.y > 555 ? -74 : 34}
+                            width="210"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#fda4af"
+                          /><text
+                            y={position.y - currentPage.y > 555 ? -56 : 52}
+                            text-anchor="middle"
+                            fill="#ffffff"
+                            font-size="14">T • Send Dev on training</text
+                          ></g
+                        >{:else if trainingCooldownTarget?.id === person.id}<g
+                          class="context-prompt"
+                          transition:fade={{ duration: 180 }}
+                          ><rect
+                            x="-105"
+                            y={position.y - currentPage.y > 555 ? -74 : 34}
+                            width="210"
+                            height="27"
+                            rx="5"
+                            fill="#17212b"
+                            stroke="#83909e"
+                          /><text
+                            y={position.y - currentPage.y > 555 ? -56 : 52}
+                            text-anchor="middle"
+                            fill="#ffffff"
+                            font-size="14">Training ready in {cooldown}s</text
+                          ></g
                         >{/if}</g
                     >{/each}
                 </g>
