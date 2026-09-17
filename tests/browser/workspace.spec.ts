@@ -26,6 +26,13 @@ async function moveAlong(page: Page, axis: 'x' | 'y', target: number) {
   expect(Math.abs((await coordinate()) - target)).toBeLessThan(12);
 }
 
+async function moveToStandup(page: Page) {
+  // Approach from below so the table's collision box never blocks the route.
+  await moveAlong(page, 'x', 620);
+  await moveAlong(page, 'y', 378);
+  await moveAlong(page, 'x', 500);
+}
+
 test('the tester can send a nearby colleague on training with T when ready', async ({
   browser
 }) => {
@@ -58,9 +65,8 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     const testerPage = pages[testerIndex];
     const trainingButton = testerPage.locator('.context-actions button.sabotage').nth(1);
 
-    await moveAlong(testerPage, 'x', 500);
     const testerMap = testerPage.locator('.map-panel');
-    await expect(testerMap.getByText('E • Call standup', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E • Call standup', { exact: true })).toHaveCount(0);
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toHaveCount(0);
 
     await expect(trainingButton).toBeDisabled();
@@ -70,7 +76,10 @@ test('the tester can send a nearby colleague on training with T when ready', asy
 
     const nearbyDevIndex = testerIndex < 2 ? testerIndex + 1 : testerIndex - 1;
     // Use the open area south of standup, away from the CI interaction zone.
-    await moveAlong(pages[nearbyDevIndex], 'x', 500);
+    await Promise.all([
+      moveAlong(testerPage, 'x', 500),
+      moveAlong(pages[nearbyDevIndex], 'x', 500)
+    ]);
     await Promise.all([
       moveAlong(testerPage, 'y', 430),
       moveAlong(pages[nearbyDevIndex], 'y', 430)
@@ -337,14 +346,10 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
       (_, index) => index !== testerIndex && index !== repairIndex
     );
     const standupPage = pages[standupIndex];
-    await standupPage.keyboard.down('d');
-    try {
-      await expect(
-        standupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
-      ).toBeVisible();
-    } finally {
-      await standupPage.keyboard.up('d');
-    }
+    await moveToStandup(standupPage);
+    await expect(
+      standupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
+    ).toBeVisible();
     await expect(
       standupPage.locator('.map-panel').getByText('E • Call standup', { exact: true })
     ).toBeVisible();
@@ -371,14 +376,10 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
 
     const secondStandupPage = pages[testerIndex];
-    await secondStandupPage.keyboard.down('s');
-    try {
-      await expect(
-        secondStandupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
-      ).toBeVisible();
-    } finally {
-      await secondStandupPage.keyboard.up('s');
-    }
+    await moveToStandup(secondStandupPage);
+    await expect(
+      secondStandupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
+    ).toBeVisible();
     await secondStandupPage.keyboard.press('e');
     for (const page of pages)
       await expect(page.getByText('Who’s blocking the release?')).toBeVisible();

@@ -10,6 +10,11 @@ import {
   FIXTURES,
   WIDTH,
   HEIGHT,
+  PLAYER_INTERACTION_REACH,
+  PLAYER_STARTS,
+  PLAYER_START_RADIUS,
+  STANDUP,
+  playerStartPositions,
   pageAt,
   walkable,
   atCiConsole
@@ -107,9 +112,52 @@ test('layout preserves spawn candidates per page and clear interaction space', (
       `${panel.id}: keep every cupboard candidate separate from maintenance access`
     );
   }
-  for (let i = 0; i < 10; i++) {
-    assert.ok(walkable(425 + (i % 4) * 45, 280 + Math.floor(i / 4) * 45));
+  for (let count = 3; count <= 10; count++) {
+    const starts = playerStartPositions(count);
+    assert.equal(starts.length, count);
+    for (const [index, start] of starts.entries()) {
+      assert.ok(walkable(start.x, start.y), `${count}-player start ${index} is walkable`);
+      assert.ok(
+        Math.hypot(start.x - STANDUP.x, start.y - STANDUP.y) > STANDUP.reach,
+        `${count}-player start ${index} is outside standup range`
+      );
+      assert.ok(
+        Math.abs(Math.hypot(start.x - STANDUP.x, start.y - STANDUP.y) - PLAYER_START_RADIUS) < 1e-9,
+        `${count}-player start ${index} stays on the fixed ring`
+      );
+      assert.ok(
+        starts.some(
+          (other) =>
+            Math.abs(other.x - (STANDUP.x * 2 - start.x)) < 1e-9 &&
+            Math.abs(other.y - start.y) < 1e-9
+        ),
+        `${count}-player start ${index} is mirrored across the top-centre axis`
+      );
+      for (const [otherIndex, other] of starts.entries()) {
+        if (otherIndex <= index) continue;
+        assert.ok(
+          Math.hypot(start.x - other.x, start.y - other.y) > PLAYER_INTERACTION_REACH,
+          `${count}-player starts ${index} and ${otherIndex} cannot interact immediately`
+        );
+      }
+    }
   }
+  assert.equal(PLAYER_STARTS.length, 10);
+  assert.deepEqual(
+    PLAYER_STARTS.map(({ x, y }) => [Math.round(x), Math.round(y)]),
+    [
+      [500, 200],
+      [565, 221],
+      [435, 221],
+      [605, 276],
+      [395, 276],
+      [605, 344],
+      [395, 344],
+      [565, 399],
+      [435, 399],
+      [500, 420]
+    ]
+  );
 });
 
 test('fixed fixtures fit their pages and only solid furniture blocks movement', () => {

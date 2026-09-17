@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session } from '../server/session.ts';
-import { CI_CONSOLE, STATIONS, EXITS, pageAt } from '../src/lib/shared.ts';
+import { CI_CONSOLE, STATIONS, EXITS, playerStartPositions, pageAt } from '../src/lib/shared.ts';
 import { CI_REPAIR } from '../src/lib/tasks.ts';
 
 function setup(count = 4) {
@@ -105,6 +105,17 @@ test('starting a sprint reveals roles for three seconds before work begins', () 
   room.tick(4000);
   assert.equal(room.phase, 'work');
   assert.equal(room.deadline, 244000);
+});
+test('players start simultaneously in count-aware symmetric ring positions', () => {
+  for (let count = 3; count <= 10; count++) {
+    const room = new Session('ABC234');
+    for (let i = 0; i < count; i++) room.join(`Person ${i}`, `socket-${i}`, undefined, 1000);
+    room.action(room.host, { type: 'start' }, 1000);
+    assert.deepEqual(
+      room.players.map(({ x, y }) => ({ x, y })),
+      playerStartPositions(count)
+    );
+  }
 });
 test('movement is bounded by elapsed time and walls', () => {
   const room = setup();

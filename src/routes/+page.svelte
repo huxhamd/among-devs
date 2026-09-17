@@ -17,6 +17,8 @@
     OFFICE_ZONES,
     PAGES,
     EXITS,
+    PLAYER_INTERACTION_REACH,
+    STANDUP,
     VISIBILITY_RADIUS,
     pageAt,
     atCiConsole,
@@ -146,7 +148,9 @@
       : undefined
   );
   let atTable = $derived(
-    me && !interactionLocked ? Math.hypot(me.x - 500, me.y - 310) <= 80 : false
+    me && !interactionLocked
+      ? Math.hypot(me.x - STANDUP.x, me.y - STANDUP.y) <= STANDUP.reach
+      : false
   );
   let atConsole = $derived(me && !interactionLocked ? atCiConsole(me) : false);
   let target = $derived(
@@ -154,7 +158,7 @@
       ? nearestWithin(
           me,
           session.players.filter((p) => p.visible && p.active && p.id !== me.id),
-          65
+          PLAYER_INTERACTION_REACH
         )
       : undefined
   );

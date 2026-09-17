@@ -15,6 +15,23 @@ export const COLORS = [
 ];
 export const WIDTH = 1000;
 export const HEIGHT = 620;
+export const STANDUP = { x: 500, y: 310, reach: 80 } as const;
+export const PLAYER_INTERACTION_REACH = 65;
+export const PLAYER_START_RADIUS = 110;
+// Fill a fixed ten-seat ring from the top, alternating clockwise and anticlockwise.
+const PLAYER_START_SLOT_ORDER = [0, 1, 9, 2, 8, 3, 7, 4, 6, 5] as const;
+export function playerStartPositions(count: number) {
+  // Partial even rings have one extra clockwise slot. A half-slot rotation centres the arc.
+  const offset = count < 10 && count % 2 === 0 ? -Math.PI / 10 : 0;
+  return PLAYER_START_SLOT_ORDER.slice(0, count).map((slot) => {
+    const angle = -Math.PI / 2 + (slot * Math.PI * 2) / 10 + offset;
+    return {
+      x: STANDUP.x + Math.cos(angle) * PLAYER_START_RADIUS,
+      y: STANDUP.y + Math.sin(angle) * PLAYER_START_RADIUS
+    };
+  });
+}
+export const PLAYER_STARTS = playerStartPositions(10);
 // Keep the visual light boundary aligned with server-authoritative visibility.
 export const VISIBILITY_RADIUS = 240;
 export const CUPBOARD_DURATION = 1000;

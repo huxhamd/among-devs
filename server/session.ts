@@ -12,7 +12,11 @@ import {
   CUPBOARD_SPAWNS,
   CUPBOARD_DURATION,
   CUPBOARD_REACH,
+  PLAYER_INTERACTION_REACH,
+  PLAYER_STARTS,
+  playerStartPositions,
   PAGES,
+  STANDUP,
   type Cupboard,
   type CupboardUse,
   STATIONS,
@@ -104,8 +108,7 @@ export class Session {
       socket,
       name: name.trim(),
       color: COLORS.find((c) => !this.players.some((p) => p.color === c))!,
-      x: 425 + (this.players.length % 4) * 45,
-      y: 280 + Math.floor(this.players.length / 4) * 45,
+      ...PLAYER_STARTS[this.players.length],
       active: true,
       connected: true,
       reported: false,
@@ -146,6 +149,7 @@ export class Session {
       return { ...spots[randomInt(spots.length)], open: false };
     });
     const tester = randomInt(this.players.length);
+    const playerStarts = playerStartPositions(this.players.length);
     this.players.forEach((p, i) => {
       p.role = i === tester ? 'tester' : 'dev';
       p.cupboard = null;
@@ -172,8 +176,7 @@ export class Session {
       p.cooldown = now + ROLE_REVEAL_DURATION + 25_000;
       p.meetings = 1;
       p.lastMove = now + ROLE_REVEAL_DURATION;
-      p.x = 425 + (i % 4) * 45;
-      p.y = 280 + Math.floor(i / 4) * 45;
+      Object.assign(p, playerStarts[i]);
     });
     this.phase = 'role-reveal';
     this.roleRevealDeadline = now + ROLE_REVEAL_DURATION;
@@ -376,7 +379,7 @@ export class Session {
         p.cooldown > now ||
         !target?.active ||
         target.id === p.id ||
-        !this.nearby(p, target, 65)
+        !this.nearby(p, target, PLAYER_INTERACTION_REACH)
       )
         throw new Error('Training is unavailable. Move closer or wait for the cooldown.');
       target.active = false;
@@ -426,7 +429,7 @@ export class Session {
     }
     if (action.type === 'meeting' || action.type === 'report') {
       if (action.type === 'meeting') {
-        if (!this.nearby(p, { x: 500, y: 310 }) || p.meetings < 1 || this.incident)
+        if (!this.nearby(p, STANDUP, STANDUP.reach) || p.meetings < 1 || this.incident)
           throw new Error('Use your standup at the central table while CI is healthy.');
         p.meetings--;
       } else {
