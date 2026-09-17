@@ -168,7 +168,10 @@ test('CI repair is shared by active devs and testers, rejects stale steps, and n
   }
   room.action(tester.id, { type: 'sabotage' }, 30000);
   const first = repairAction(room);
-  assert.throws(() => room.action(devs[0].id, { ...first, answer: 'wrong' }, 30000), /setting/);
+  assert.throws(
+    () => room.action(devs[0].id, { ...first, answer: 'wrong' }, 30000),
+    /recovery action/
+  );
   assert.throws(() => room.action(devs[0].id, { ...first, step: 2 }, 30000), /current/);
   assert.throws(() => room.action(devs[0].id, { ...first, step: -1 }, 30000), /Reopen/);
   room.action(devs[0].id, first, 30000);

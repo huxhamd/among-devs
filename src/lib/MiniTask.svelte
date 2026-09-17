@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TaskView } from './tasks';
+  import IncidentBoard from './IncidentBoard.svelte';
   let {
     puzzle,
     disabled,
@@ -8,7 +9,7 @@
   }: {
     puzzle: TaskView;
     disabled: boolean;
-    submit: (answer: string) => void;
+    submit: (answer: string, targetStep?: number) => void;
     shared?: boolean;
   } = $props();
   let selection = $state('');
@@ -22,15 +23,21 @@
 
 <section class="mini-task" aria-label={puzzle.title}>
   <h3>{puzzle.title}</h3>
-  <p>{puzzle.instructions}</p>
-  <div class="task-progress" role="status">{puzzle.step} of {puzzle.steps.length} steps saved</div>
-  <progress
-    max={puzzle.steps.length}
-    value={puzzle.step}
-    aria-label={shared ? 'Shared repair progress' : 'Ticket progress'}
-  ></progress>
+  {#if puzzle.kind !== 'incident'}
+    <p>{puzzle.instructions}</p>
+    <div class="task-progress" role="status">
+      {puzzle.step} of {puzzle.steps.length} steps saved
+    </div>
+    <progress
+      max={puzzle.steps.length}
+      value={puzzle.step}
+      aria-label={shared ? 'Shared repair progress' : 'Ticket progress'}
+    ></progress>
+  {/if}
   {#if current}
-    {#if puzzle.kind === 'sequence'}
+    {#if puzzle.kind === 'incident'}
+      <IncidentBoard {puzzle} {disabled} {submit} />
+    {:else if puzzle.kind === 'sequence'}
       <ol class="runbook">
         {#each puzzle.steps as step, index}
           <li

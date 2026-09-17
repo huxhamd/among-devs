@@ -172,20 +172,45 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
     const repairDialog = repairPage.getByRole('dialog', { name: 'Repair CI', exact: true });
-    await expect(repairDialog.locator('.task-progress')).toHaveText('0 of 3 steps saved');
-    await repairDialog.getByRole('button', { name: 'Running', exact: true }).click();
-    await repairDialog.getByRole('button', { name: 'Apply setting' }).click();
-    await expect(repairDialog.getByRole('alert')).toContainText('setting will not restore CI');
-    for (const [index, setting] of ['Paused', 'Cleared', 'Run'].entries()) {
+    await expect(repairDialog.locator('.recovery-count')).toHaveText('0/3 stages resolved');
+    await expect(repairDialog.getByRole('button', { name: 'Apply setting' })).toHaveCount(0);
+    await repairDialog.getByRole('button', { name: 'Run health check', exact: true }).click();
+    await repairDialog
+      .getByRole('button', { name: 'Place action on Pipeline', exact: true })
+      .click();
+    await expect(repairDialog.getByRole('alert')).toContainText('recovery action will not resolve');
+    await repairDialog.getByRole('button', { name: 'Run health check', exact: true }).click();
+    // Regular snapshots must not clear an action while the player chooses a destination.
+    await repairPage.waitForTimeout(350);
+    await expect(
+      repairDialog.getByRole('button', { name: 'Run health check', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
+    await repairDialog.getByRole('button', { name: 'Place action on Health', exact: true }).click();
+    await expect(repairDialog.getByRole('alert')).toContainText('current stage first');
+    for (const [index, setting] of [
+      'Pause pipeline',
+      'Clear bad deployment',
+      'Run health check'
+    ].entries()) {
       const workerDialog =
         index === 0
           ? repairDialog
           : testerPage.getByRole('dialog', { name: 'Repair CI', exact: true });
-      await workerDialog.getByRole('button', { name: setting, exact: true }).click();
-      await workerDialog.getByRole('button', { name: 'Apply setting' }).click();
+      const action = workerDialog.getByRole('button', { name: setting, exact: true });
+      const destination = workerDialog.getByRole('button', {
+        name: `Place action on ${['Pipeline', 'Deployment', 'Health'][index]}`,
+        exact: true
+      });
+      if (index === 1) await action.dragTo(destination);
+      else {
+        await action.focus();
+        await workerDialog.page().keyboard.press('Enter');
+        await destination.focus();
+        await workerDialog.page().keyboard.press('Enter');
+      }
       if (index < 2) {
-        await expect(repairDialog.locator('.task-progress')).toHaveText(
-          `${index + 1} of 3 steps saved`
+        await expect(repairDialog.locator('.recovery-count')).toHaveText(
+          `${index + 1}/3 stages resolved`
         );
         for (const page of pages)
           await expect(page.locator('.ci-banner .outage')).toContainText(
@@ -197,13 +222,13 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
         await repairPage.keyboard.press('Escape');
         await expect(repairDialog).toBeHidden();
         await repairPage.getByRole('button', { name: 'Repair CI · E', exact: true }).click();
-        await expect(repairDialog.locator('.task-progress')).toHaveText('1 of 3 steps saved');
+        await expect(repairDialog.locator('.recovery-count')).toHaveText('1/3 stages resolved');
         await repairPage.reload();
         await expect(
           repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
         ).toBeVisible();
         await repairPage.keyboard.press('e');
-        await expect(repairDialog.locator('.task-progress')).toHaveText('1 of 3 steps saved');
+        await expect(repairDialog.locator('.recovery-count')).toHaveText('1/3 stages resolved');
         await testerPage.keyboard.down('w');
         try {
           await expect(
@@ -216,8 +241,8 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
         await expect(
           testerPage
             .getByRole('dialog', { name: 'Repair CI', exact: true })
-            .locator('.task-progress')
-        ).toHaveText('1 of 3 steps saved');
+            .locator('.recovery-count')
+        ).toHaveText('1/3 stages resolved');
       }
     }
     await expect(repairDialog).toBeHidden();

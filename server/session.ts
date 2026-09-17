@@ -409,9 +409,14 @@ export class Session {
       )
         throw new Error('Reopen CI repair to load the current incident.');
       if (action.step < repair.step) return;
-      if (action.step !== repair.step) throw new Error('Wait for the current repair step.');
+      if (action.step !== repair.step)
+        throw new Error(
+          'Resolve the current stage first: pause the pipeline before clearing the deployment, then check health.'
+        );
       if (CI_REPAIR.steps[repair.step].answer !== action.answer)
-        throw new Error('That setting will not restore CI. Try again.');
+        throw new Error(
+          'That recovery action will not resolve this stage. Read its incident clue and try again.'
+        );
       repair.step++;
       if (repair.step === CI_REPAIR.steps.length) {
         this.incident = false;
@@ -565,8 +570,7 @@ export class Session {
         ...a,
         // Locations are map infrastructure and always known. Door activity is only
         // disclosed while the viewer is on that panel's page.
-        open:
-          this.phase !== 'work' || pageAt(me)?.id === pageAt(a)?.id ? a.open : null
+        open: this.phase !== 'work' || pageAt(me)?.id === pageAt(a)?.id ? a.open : null
       })),
       cupboard: me.cupboard ? { ...me.cupboard } : null,
       cupboards: this.cupboards.map((c) => ({
@@ -634,7 +638,7 @@ export class Session {
       cooldown: me.cooldown,
       sabotageReady: this.sabotageReady,
       incident: this.incident,
-      repair: this.repair ? taskView(CI_REPAIR, this.repair.id, this.repair.step, [1, 0]) : null,
+      repair: this.repair ? taskView(CI_REPAIR, this.repair.id, this.repair.step, [0, 1, 2]) : null,
       meetingsLeft: me.meetings,
       meeting: this.meeting
         ? {

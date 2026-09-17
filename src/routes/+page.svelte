@@ -267,7 +267,7 @@
         error = timeout ? 'Connection interrupted. Try again.' : reply.error!;
     });
   }
-  function submitTask(answer: string) {
+  function submitTask(answer: string, targetStep?: number) {
     const puzzle = currentPuzzle;
     if (!puzzle || taskPending || !connected) return;
     taskPending = true;
@@ -277,7 +277,7 @@
     socket.timeout(5000).emit(
       'action',
       (repairing
-        ? { type: 'repair', puzzle: puzzle.id, step: puzzle.step, answer }
+        ? { type: 'repair', puzzle: puzzle.id, step: targetStep ?? puzzle.step, answer }
         : {
             type: 'task',
             station: stationId,
@@ -289,7 +289,11 @@
         taskPending = false;
         if ((timeout || reply.error) && stationId === submittedStation)
           taskError = timeout ? 'Connection interrupted. Retry this step.' : reply.error!;
-        if (reply?.error?.includes('refinement') || reply?.error?.includes('setting will not'))
+        if (
+          reply?.error?.includes('refinement') ||
+          reply?.error?.includes('recovery action') ||
+          reply?.error?.includes('current stage')
+        )
           metric(submittedStation).failures++;
         saveTaskMetrics();
       }
@@ -1589,6 +1593,7 @@
     <div
       use:focusDialog
       class="modal"
+      class:incident-modal={repairing}
       role="dialog"
       aria-modal="true"
       aria-label={station.name}
@@ -1646,8 +1651,10 @@
         The tester can press <b>B</b> anywhere to break CI every 45 seconds and press <b>T</b> to
         send a nearby colleague on training every 30 seconds. To repair CI, go to the CI Control
         Console at the top of the central office, press <b>E</b>, and complete the three shared
-        repair steps. Any active colleague, including the tester, can help; trainees cannot. Repairs
-        do not close tickets. The tester can also press
+        stages on the shared incident board. Select a recovery action and its destination, or drag
+        it onto the board: pause the pipeline, clear the bad deployment, then check health. Any
+        active colleague, including the tester, can help; trainees cannot. Repairs do not close
+        tickets. The tester can also press
         <b>E</b> at that console to break CI. The Server Cupboard’s restart task is a separate ticket.
         With three people, the tester’s training action is disabled.
       </p>
@@ -1671,10 +1678,10 @@
       <p>
         One pair of maintenance access panels connects either Development and Kitchen or Server
         Cupboard and Product Corner, chosen randomly each sprint. Each endpoint has two possible
-        locations. Everyone can see the active panel from anywhere on its page. Only the active Tester
-        can press <b>E</b> to travel. Entry, travel and exit each take one second. Entry and exit are
-        visible; during travel you are hidden and cannot see colleagues. Movement and other actions are
-        blocked throughout. Used panels remain open. A standup interrupts travel at the entrance unless
+        locations. Everyone can see the active panel from anywhere on its page. Only the active
+        Tester can press <b>E</b> to travel. Entry, travel and exit each take one second. Entry and exit
+        are visible; during travel you are hidden and cannot see colleagues. Movement and other actions
+        are blocked throughout. Used panels remain open. A standup interrupts travel at the entrance unless
         you have already begun exiting.
       </p>
       <button class="primary" onclick={() => (help = false)}>Sounds suspicious. I’m in.</button>

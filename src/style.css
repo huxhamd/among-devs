@@ -1111,6 +1111,10 @@ kbd {
   overflow: auto;
   box-shadow: 0 20px 90px #0006;
 }
+.modal.incident-modal {
+  width: min(780px, 100%);
+  max-width: 780px;
+}
 .modal h2 {
   font-size: 28px;
   letter-spacing: -1px;

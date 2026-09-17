@@ -1,6 +1,6 @@
 export type TaskStep = { label: string; options: string[]; answer: string };
 export type TaskDefinition = {
-  kind: 'sequence' | 'matching' | 'repair';
+  kind: 'sequence' | 'matching' | 'repair' | 'incident';
   title: string;
   instructions: string;
   steps: TaskStep[];
@@ -35,13 +35,29 @@ const matching = (title: string, rows: [string, string][]): TaskDefinition => ({
   steps: rows.map(([label, answer]) => ({ label, answer, options: rows.map((row) => row[1]) }))
 });
 
-export const CI_REPAIR = repair('Restore the shared pipeline', [
-  ['Failing pipeline', 'Paused', ['Running', 'Paused']],
-  ['Bad deployment', 'Cleared', ['Retained', 'Cleared']],
-  ['Health check', 'Run', ['Skip', 'Run']]
-]);
-CI_REPAIR.instructions =
-  'Pause the pipeline, clear the bad deployment, then run its health check. Any active colleague can continue these shared steps.';
+export const CI_REPAIR: TaskDefinition = {
+  kind: 'incident',
+  title: 'Deployment failure',
+  instructions:
+    'Read the incident clues. Select a recovery action, then select its destination on the board, or drag it there. Recover from left to right; everyone shares this board.',
+  steps: [
+    {
+      label: 'Pipeline',
+      answer: 'Pause pipeline',
+      options: ['Clear bad deployment', 'Run health check', 'Pause pipeline']
+    },
+    {
+      label: 'Deployment',
+      answer: 'Clear bad deployment',
+      options: ['Clear bad deployment', 'Run health check', 'Pause pipeline']
+    },
+    {
+      label: 'Health',
+      answer: 'Run health check',
+      options: ['Clear bad deployment', 'Run health check', 'Pause pipeline']
+    }
+  ]
+};
 
 export const TASK_VARIANTS: Record<string, TaskDefinition[]> = {
   merge: [
