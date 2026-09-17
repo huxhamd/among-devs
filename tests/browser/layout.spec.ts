@@ -96,7 +96,7 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
     await expectFittedGame(tester);
     await tester.screenshot({ path: 'test-results/gameplay-laptop.png' });
 
-    const breakCi = tester.getByRole('button', { name: 'Break CI · B', exact: true });
+    const breakCi = tester.getByRole('button', { name: 'Break CI • B', exact: true });
     await expect(breakCi).toBeEnabled({ timeout: 25_000 });
     await breakCi.click();
     await expect(tester.locator('.ci-banner')).toHaveClass(/offline/);

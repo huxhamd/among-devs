@@ -85,7 +85,7 @@
         : travelling
           ? 'Travelling through maintenance route…'
           : 'Exiting access panel…'
-      : 'Use access panel · E'
+      : 'Use access panel • E'
   );
   function useAccess() {
     if (!nearbyAccess || interactionLocked) return;
@@ -102,10 +102,11 @@
   let cupboardLabel = $derived(
     cupboardUse
       ? hidden
-        ? 'Leave cupboard · E'
+        ? 'Leave cupboard • E'
         : `${cupboardUse.phase === 'entering' ? 'Entering' : 'Exiting'} cupboard…`
-      : 'Hide in cupboard · E'
+      : 'Hide in cupboard • E'
   );
+  let cupboardPrompt = $derived(hidden ? 'E • Leave cupboard' : 'E • Hide in cupboard');
   function useCupboard() {
     const id = cupboardUse?.id ?? nearbyCupboard?.id;
     if (!id || (cupboardUse && !hidden)) return;
@@ -1062,12 +1063,12 @@
                         <text y="94" text-anchor="middle" fill="#ffffff" font-size="14"
                           >{session.incident
                             ? me?.active
-                              ? 'E — Repair CI'
+                              ? 'E • Repair CI'
                               : 'Active colleague required'
                             : session.role === 'tester' && me?.active
                               ? sabotageCooldown
                                 ? `Break CI ready in ${sabotageCooldown}s`
-                                : 'E — Break CI'
+                                : 'E • Break CI'
                               : 'CI operational ✓'}</text
                         >
                       {/if}
@@ -1099,7 +1100,7 @@
                           ? 'No standups remaining'
                           : session.incident
                             ? 'CI down — standup blocked'
-                            : 'E — Call standup'}</text
+                            : 'E • Call standup'}</text
                       >
                     {/if}
                   {/if}
@@ -1146,7 +1147,7 @@
                             ? 'Ticket already closed ✓'
                             : session.incident
                               ? 'CI down — ticket blocked'
-                              : 'E — Open ticket'}</text
+                              : 'E • Open ticket'}</text
                         >{/if}</g
                     >{/each}
                   {#each (session.accessPanels ?? []).filter((a) => pageAt(a)?.id === currentPage.id) as panel (panel.id)}
@@ -1196,7 +1197,7 @@
                           stroke="#c6a96c"
                         />
                         <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
-                          >Use access panel · E</text
+                          >E • Use access panel</text
                         >
                       {/if}
                     </g>
@@ -1253,7 +1254,7 @@
                           stroke="#c3b6ff"
                         />
                         <text x="0" y="48" text-anchor="middle" fill="white" font-size="13"
-                          >{cupboardLabel}</text
+                          >{cupboardPrompt}</text
                         >
                       {/if}
                     </g>
@@ -1353,7 +1354,7 @@
                           y={position.y - currentPage.y > 555 ? -56 : 52}
                           text-anchor="middle"
                           fill="#ffffff"
-                          font-size="14">E — Report training notice</text
+                          font-size="14">E • Report training notice</text
                         >{:else if trainingTarget?.id === person.id}<rect
                           x="-105"
                           y={position.y - currentPage.y > 555 ? -74 : 34}
@@ -1366,7 +1367,7 @@
                           y={position.y - currentPage.y > 555 ? -56 : 52}
                           text-anchor="middle"
                           fill="#ffffff"
-                          font-size="14">T — Send Dev on training</text
+                          font-size="14">T • Send Dev on training</text
                         >{:else if trainingCooldownTarget?.id === person.id}<rect
                           x="-105"
                           y={position.y - currentPage.y > 555 ? -74 : 34}
@@ -1456,31 +1457,31 @@
                 {/if}
                 {#if report && me?.active}<button
                     class="secondary wide"
-                    onclick={() => act({ type: 'report' })}>Report training notice · E</button
+                    onclick={() => act({ type: 'report' })}>Report training notice • E</button
                   >{:else if atConsole && session.incident}<button
                     class="primary wide"
                     disabled={!me?.active}
                     onclick={openRepair}
-                    >{me?.active ? 'Repair CI · E' : 'Active colleague required'}</button
+                    >{me?.active ? 'Repair CI • E' : 'Active colleague required'}</button
                   >{/if}{#if nearby && !report}<button
                     class="primary wide"
                     disabled={session.completed.includes(nearby.id) || session.incident}
                     onclick={openTask}
                     >{session.completed.includes(nearby.id)
                       ? 'Ticket already closed ✓'
-                      : 'Open ticket · E'}</button
+                      : 'Open ticket • E'}</button
                   >{/if}{#if atTable && me?.active && !report}<button
                     class="secondary wide"
                     disabled={!session.meetingsLeft || session.incident}
                     onclick={() => act({ type: 'meeting' })}
-                    >Call standup ({session.meetingsLeft} left) · E</button
+                    >Call standup ({session.meetingsLeft} left) • E</button
                   >{/if}{#if session.role === 'tester' && me?.active}<button
                     class="sabotage wide"
                     disabled={interactionLocked || session.incident || sabotageCooldown > 0}
                     onclick={() => act({ type: 'sabotage' })}
                     >{sabotageCooldown
                       ? `Break CI ready in ${sabotageCooldown}s`
-                      : 'Break CI · B'}</button
+                      : 'Break CI • B'}</button
                   >{#if session.players.length > 3}<button
                       class="sabotage wide"
                       disabled={!target || cooldown > 0}
@@ -1488,7 +1489,7 @@
                       >{cooldown
                         ? `Training ready in ${cooldown}s`
                         : target
-                          ? `Send ${target.name} on training · T`
+                          ? `Send ${target.name} on training • T`
                           : 'Move near a dev to send on training'}</button
                     >{:else}<small>Three-person sprint: win by running out the clock.</small
                     >{/if}{/if}

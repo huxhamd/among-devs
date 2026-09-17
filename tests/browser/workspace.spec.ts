@@ -36,7 +36,7 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     await testerPage.waitForTimeout(400);
     await testerPage.keyboard.up(testerIndex < 2 ? 'd' : 'a');
     const testerMap = testerPage.locator('.map-panel');
-    await expect(testerMap.getByText('E — Call standup', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E • Call standup', { exact: true })).toBeVisible();
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toHaveCount(0);
 
     await expect(trainingButton).toBeDisabled();
@@ -49,26 +49,26 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     await Promise.all([testerPage.keyboard.down('s'), pages[nearbyDevIndex].keyboard.down('s')]);
     await testerPage.waitForTimeout(700);
     await Promise.all([testerPage.keyboard.up('s'), pages[nearbyDevIndex].keyboard.up('s')]);
-    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
+    await expect(testerMap.getByText('E • Call standup', { exact: true })).toHaveCount(0);
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toBeVisible();
 
     await expect(trainingButton).toBeEnabled({ timeout: 30_000 });
     const trainingLabel = await trainingButton.innerText();
-    const targetName = trainingLabel.match(/^Send (.+) on training · T$/)?.[1];
+    const targetName = trainingLabel.match(/^Send (.+) on training • T$/)?.[1];
     expect(targetName).toBeTruthy();
     const targetIndex = names.indexOf(targetName!);
     expect(targetIndex).toBeGreaterThanOrEqual(0);
-    await expect(testerMap.getByText('T — Send Dev on training', { exact: true })).toBeVisible();
-    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
+    await expect(testerMap.getByText('T • Send Dev on training', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E • Call standup', { exact: true })).toHaveCount(0);
 
     await testerPage.keyboard.press('t');
     await expect(pages[targetIndex].locator('.role-tag')).toContainText('ON TRAINING');
     await expect(trainingButton).toBeDisabled();
     await expect(
-      testerPage.getByRole('button', { name: 'Report training notice · E', exact: true })
+      testerPage.getByRole('button', { name: 'Report training notice • E', exact: true })
     ).toBeVisible();
-    await expect(testerMap.getByText('E — Report training notice', { exact: true })).toBeVisible();
-    await expect(testerMap.getByText('E — Call standup', { exact: true })).toHaveCount(0);
+    await expect(testerMap.getByText('E • Report training notice', { exact: true })).toBeVisible();
+    await expect(testerMap.getByText('E • Call standup', { exact: true })).toHaveCount(0);
     await testerPage.keyboard.press('e');
     for (const page of pages)
       await expect(page.getByText('Who’s blocking the release?')).toBeVisible();
@@ -140,7 +140,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const breakCiButton = testerPage.locator('.context-actions button.sabotage').first();
     await expect(breakCiButton).toBeDisabled();
     await expect(breakCiButton).toBeEnabled({ timeout: 25_000 });
-    await expect(breakCiButton).toHaveText('Break CI · B');
+    await expect(breakCiButton).toHaveText('Break CI • B');
     await testerPage.keyboard.press('b');
     await expect(repairPage.getByText('CI DOWN — REPAIR REQUIRED', { exact: true })).toBeVisible();
     await testerPage.keyboard.press('b');
@@ -162,12 +162,12 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
     await repairPage.keyboard.down('w');
     try {
-      await expect(repairPage.getByText('E — Repair CI', { exact: true })).toBeVisible();
+      await expect(repairPage.getByText('E • Repair CI', { exact: true })).toBeVisible();
     } finally {
       await repairPage.keyboard.up('w');
     }
     await expect(
-      repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+      repairPage.getByRole('button', { name: 'Repair CI • E', exact: true })
     ).toBeVisible();
     await repairPage.screenshot({ path: 'test-results/ci-console.png', fullPage: true });
     await repairPage.keyboard.press('e');
@@ -246,18 +246,18 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
         await repairPage.screenshot({ path: 'test-results/ci-repair.png', fullPage: true });
         await repairPage.keyboard.press('Escape');
         await expect(repairDialog).toBeHidden();
-        await repairPage.getByRole('button', { name: 'Repair CI · E', exact: true }).click();
+        await repairPage.getByRole('button', { name: 'Repair CI • E', exact: true }).click();
         await expect(repairDialog.locator('.recovery-count')).toHaveText('1 / 3 stages resolved');
         await repairPage.reload();
         await expect(
-          repairPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+          repairPage.getByRole('button', { name: 'Repair CI • E', exact: true })
         ).toBeVisible();
         await repairPage.keyboard.press('e');
         await expect(repairDialog.locator('.recovery-count')).toHaveText('1 / 3 stages resolved');
         await testerPage.keyboard.down('w');
         try {
           await expect(
-            testerPage.getByRole('button', { name: 'Repair CI · E', exact: true })
+            testerPage.getByRole('button', { name: 'Repair CI • E', exact: true })
           ).toBeVisible();
         } finally {
           await testerPage.keyboard.up('w');
@@ -314,13 +314,13 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await standupPage.keyboard.down('d');
     try {
       await expect(
-        standupPage.getByRole('button', { name: /^Call standup \(\d+ left\) · E$/ })
+        standupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
       ).toBeVisible();
     } finally {
       await standupPage.keyboard.up('d');
     }
     await expect(
-      standupPage.locator('.map-panel').getByText('E — Call standup', { exact: true })
+      standupPage.locator('.map-panel').getByText('E • Call standup', { exact: true })
     ).toBeVisible();
     await standupPage.keyboard.press('e');
     for (const page of pages)
@@ -345,7 +345,7 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await secondStandupPage.keyboard.down('s');
     try {
       await expect(
-        secondStandupPage.getByRole('button', { name: /^Call standup \(\d+ left\) · E$/ })
+        secondStandupPage.getByRole('button', { name: /^Call standup \(\d+ left\) • E$/ })
       ).toBeVisible();
     } finally {
       await secondStandupPage.keyboard.up('s');

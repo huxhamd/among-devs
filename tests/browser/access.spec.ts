@@ -103,21 +103,22 @@ test('maintenance travel changes pages, blocks actions and supports the return j
       'viewBox',
       `${destinationPage.x} ${destinationPage.y} 1000 620`
     );
-    await expect(page.getByRole('button', { name: 'Use access panel · E' })).toBeEnabled();
+    await expect(page.getByText('E • Use access panel', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use access panel • E' })).toBeEnabled();
     await expect(page.locator(`[data-panel-id="${destination.id}"]`)).toHaveAttribute(
       'data-door',
       'open'
     );
     await expect(page.locator('#visibility-light')).toHaveAttribute('r', '240');
     await page.locator('.map-panel').screenshot({ path: 'test-results/access-exit.png' });
-    await page.getByRole('button', { name: 'Use access panel · E' }).click();
+    await page.getByRole('button', { name: 'Use access panel • E' }).click();
     await expect(page.getByRole('button', { name: 'Entering access panel…' })).toBeDisabled();
     const sourcePage = pageAt(source)!;
     await expect(page.locator('.map-panel svg')).toHaveAttribute(
       'viewBox',
       `${sourcePage.x} ${sourcePage.y} 1000 620`
     );
-    await expect(page.getByRole('button', { name: 'Use access panel · E' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Use access panel • E' })).toBeEnabled();
     await expect(page.locator(`[data-panel-id="${source.id}"]`)).toHaveAttribute(
       'data-door',
       'open'

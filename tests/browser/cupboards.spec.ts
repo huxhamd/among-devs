@@ -83,14 +83,15 @@ test('Tester can hide, see half the normal radius, and leave an open cupboard', 
     await expect(cabinet).toHaveAttribute('data-door', 'closed');
     await page.keyboard.press('e');
     await expect(page.getByRole('button', { name: 'Entering cupboard…' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Leave cupboard · E' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Leave cupboard • E' })).toBeEnabled();
     await expect(page.locator('#visibility-light')).toHaveAttribute('r', '120');
     await expect(page.locator('.map-player').filter({ hasText: '(you)' })).toHaveCount(0);
     await expect(cabinet).toHaveAttribute('data-door', 'closed');
     await page.locator('.map-panel').screenshot({ path: 'test-results/cupboard-hidden.png' });
-    await page.getByRole('button', { name: 'Leave cupboard · E' }).click();
+    await page.getByRole('button', { name: 'Leave cupboard • E' }).click();
     await expect(page.getByRole('button', { name: 'Exiting cupboard…' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Hide in cupboard · E' })).toBeEnabled();
+    await expect(page.getByText('E • Hide in cupboard', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hide in cupboard • E' })).toBeEnabled();
     await expect(page.locator('#visibility-light')).toHaveAttribute('r', '240');
     await expect(cabinet).toHaveAttribute('data-door', 'open');
     await expect(page.locator('.map-player').filter({ hasText: '(you)' })).toBeVisible();
