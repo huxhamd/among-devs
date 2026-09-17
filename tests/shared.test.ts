@@ -7,6 +7,9 @@ import {
   PAGES,
   STATIONS,
   EXITS,
+  FIXTURES,
+  WIDTH,
+  HEIGHT,
   pageAt,
   walkable,
   atCiConsole
@@ -57,8 +60,73 @@ test('five pages have reachable workstations and paired unobstructed exits', () 
   for (const cupboard of CUPBOARD_SPAWNS)
     assert.ok(visited.has(`${cupboard.x},${cupboard.y}`), cupboard.id);
   for (const panel of ACCESS_SPAWNS) assert.ok(visited.has(`${panel.x},${panel.y}`), panel.id);
+  for (const page of PAGES) {
+    for (let x = page.x + 30; x < page.x + WIDTH - 20; x += 10) {
+      for (let y = page.y + 30; y < page.y + HEIGHT - 20; y += 10) {
+        if (walkable(x, y)) assert.ok(visited.has(`${x},${y}`), `Isolated floor at ${x},${y}`);
+      }
+    }
+  }
   assert.equal(walkable(-500, -310), false, 'missing corners are outside the office');
   assert.equal(walkable(500, -615), false, 'outer walls stop movement');
+});
+
+test('layout preserves spawn candidates per page and clear interaction space', () => {
+  // Keep the main hub routes broad enough for movement pulses and groups of players.
+  for (const offset of [-20, 0, 20]) {
+    for (let x = 0; x <= WIDTH; x += 10) assert.ok(walkable(x, 310 + offset));
+    for (let y = 0; y <= 310; y += 10) assert.ok(walkable(800 + offset, y));
+    for (let y = 310; y <= HEIGHT; y += 10) assert.ok(walkable(500 + offset, y));
+  }
+  for (const page of PAGES) {
+    assert.equal(CUPBOARD_SPAWNS.filter((s) => pageAt(s)?.id === page.id).length, 2);
+    assert.equal(
+      ACCESS_SPAWNS.filter((s) => pageAt(s)?.id === page.id).length,
+      page.id === 'centre' ? 0 : 2
+    );
+  }
+  for (const spot of [...STATIONS, ...CUPBOARD_SPAWNS, ...ACCESS_SPAWNS]) {
+    for (const [dx, dy] of [
+      [0, 0],
+      [-25, 0],
+      [25, 0],
+      [0, -25],
+      [0, 25]
+    ]) {
+      assert.ok(
+        walkable(spot.x + dx, spot.y + dy),
+        `${spot.id}: interaction clearance ${dx},${dy}`
+      );
+    }
+  }
+  for (const panel of ACCESS_SPAWNS) {
+    assert.ok(
+      CUPBOARD_SPAWNS.every(
+        (cupboard) => Math.hypot(panel.x - cupboard.x, panel.y - cupboard.y) > 150
+      ),
+      `${panel.id}: keep every cupboard candidate separate from maintenance access`
+    );
+  }
+  for (let i = 0; i < 10; i++) {
+    assert.ok(walkable(425 + (i % 4) * 45, 280 + Math.floor(i / 4) * 45));
+  }
+});
+
+test('fixed fixtures fit their pages and only solid furniture blocks movement', () => {
+  assert.equal(new Set(FIXTURES.map((f) => f.id)).size, FIXTURES.length);
+  for (const fixture of FIXTURES) {
+    const page = pageAt(fixture)!;
+    assert.ok(page, fixture.id);
+    assert.ok(
+      fixture.x + fixture.w < page.x + WIDTH && fixture.y + fixture.h < page.y + HEIGHT,
+      fixture.id
+    );
+    assert.equal(
+      walkable(fixture.x + fixture.w / 2, fixture.y + fixture.h / 2),
+      !fixture.blocking,
+      fixture.id
+    );
+  }
 });
 
 test('nearest player detection prefers proximity over roster order', () => {

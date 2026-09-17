@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TASK_VARIANTS } from '../../src/lib/tasks';
-import { STATIONS, pageAt } from '../../src/lib/shared';
+import { FIXTURES, STATIONS, pageAt } from '../../src/lib/shared';
 
 async function moveTo(page: Page, x: number, y: number) {
   const position = async () => {
@@ -55,6 +55,9 @@ test('all mini-task controls complete and accepted steps survive refresh', async
     await expect(pages[0].locator('.role-reveal-card')).toBeHidden({ timeout: 5000 });
     const page = pages[0];
     await expect(page.locator('.map-panel svg')).toHaveAttribute('viewBox', '0 0 1000 620');
+    await expect(page.locator('.office-fixture')).toHaveCount(
+      FIXTURES.filter((fixture) => pageAt(fixture)?.id === 'centre').length
+    );
     await page.locator('.map-panel').screenshot({ path: 'test-results/map-centre.png' });
     // Walk through actual page exits and the wing partitions.
     const visits = [
@@ -62,49 +65,50 @@ test('all mini-task controls complete and accepted steps survive refresh', async
         station: 'merge',
         waypoints: [
           [800, 280],
-          [800, -280],
-          [620, -280],
-          [420, -350]
+          [800, -320],
+          [470, -320]
         ]
       },
       {
         station: 'coffee',
         waypoints: [
-          [620, -350],
-          [620, -280],
-          [800, -280],
+          [800, -320],
           [800, 280],
           [500, 280],
-          [500, 780],
-          [730, 780],
-          [730, 980]
+          [500, 750],
+          [650, 750],
+          [650, 930],
+          [780, 930]
         ]
       },
       {
         station: 'ticket',
         waypoints: [
-          [730, 780],
-          [500, 780],
+          [650, 930],
+          [650, 750],
+          [500, 750],
           [500, 310],
           [-180, 310],
-          [-180, 400],
-          [-540, 400],
-          [-540, 440]
+          [-520, 310],
+          [-520, 330]
         ]
       },
       {
         station: 'build',
         waypoints: [
-          [-180, 440],
+          [-180, 330],
           [-180, 310],
-          [1450, 310],
-          [1550, 180]
+          [1520, 310],
+          [1520, 320]
         ]
       }
     ];
     for (const { station, waypoints } of visits) {
       for (const [x, y] of waypoints) await moveTo(page, x, y);
       const wing = pageAt(STATIONS.find((item) => item.id === station)!)!;
+      await expect(page.locator('.office-fixture')).toHaveCount(
+        FIXTURES.filter((fixture) => pageAt(fixture)?.id === wing.id).length
+      );
       await expect(page.locator('.map-panel svg')).toHaveAttribute(
         'viewBox',
         `${wing.x} ${wing.y} 1000 620`

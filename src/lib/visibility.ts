@@ -1,7 +1,7 @@
-import { HEIGHT, WIDTH, WALLS, VISIBILITY_RADIUS, pageAt } from './shared.ts';
+import { HEIGHT, WIDTH, SIGHT_BLOCKERS, VISIBILITY_RADIUS, pageAt } from './shared.ts';
 
 type Point = { x: number; y: number };
-type Wall = (typeof WALLS)[number];
+type Wall = (typeof SIGHT_BLOCKERS)[number];
 
 // Intersect a finite ray with the actual wall, without the movement collision buffer.
 // Both the server's sight checks and the client's light rays use this calculation.
@@ -32,7 +32,7 @@ export function canSee(origin: Point, target: Point, radius = VISIBILITY_RADIUS)
   const direction = distance
     ? { x: (target.x - origin.x) / distance, y: (target.y - origin.y) / distance }
     : { x: 0, y: 0 };
-  return !WALLS.some((wall) => wallHit(origin, direction, distance, wall) !== null);
+  return !SIGHT_BLOCKERS.some((wall) => wallHit(origin, direction, distance, wall) !== null);
 }
 
 // A visibility polygon bounded by the current page and the radius's bounding square.
@@ -44,7 +44,7 @@ export function lightPolygon(origin: Point, radius = VISIBILITY_RADIUS): Point[]
   const right = Math.min(page.x + WIDTH, origin.x + radius);
   const top = Math.max(page.y, origin.y - radius);
   const bottom = Math.min(page.y + HEIGHT, origin.y + radius);
-  const walls = WALLS.filter(
+  const walls = SIGHT_BLOCKERS.filter(
     (wall) =>
       wall.x <= right && wall.x + wall.w >= left && wall.y <= bottom && wall.y + wall.h >= top
   );

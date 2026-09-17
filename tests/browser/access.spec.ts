@@ -82,7 +82,10 @@ test('maintenance travel changes pages, blocks actions and supports the return j
       if (source.x > 1300) {
         await moveTo(page, 1150, 570);
         await moveTo(page, source.x, 570);
-      } else await moveTo(page, 1150, source.y);
+      } else {
+        await moveTo(page, 1240, 550);
+        await moveTo(page, 1240, source.y);
+      }
     }
     await moveTo(page, source.x, source.y);
     await expect(page.locator(`[data-panel-id="${source.id}"]`)).toHaveAttribute(

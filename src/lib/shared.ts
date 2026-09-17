@@ -1,4 +1,5 @@
 import type { TaskView } from './tasks.ts';
+import { FIXTURE_TYPES, OFFICE_LAYOUTS, type Fixture } from './office.ts';
 
 export const COLORS = [
   '#a5b4fc',
@@ -26,14 +27,14 @@ export const ACCESS_PAIRS = [
 ] as const;
 // Separate floor positions keep panels away from cupboard entrances.
 export const ACCESS_SPAWNS = [
-  { id: 'access-north-top', x: 400, y: -510 },
-  { id: 'access-north-bottom', x: 580, y: -80 },
-  { id: 'access-south-top', x: 700, y: 750 },
-  { id: 'access-south-bottom', x: 250, y: 1160 },
-  { id: 'access-east-top', x: 1150, y: 190 },
-  { id: 'access-east-bottom', x: 1820, y: 480 },
-  { id: 'access-west-top', x: -450, y: 110 },
-  { id: 'access-west-bottom', x: -850, y: 480 }
+  { id: 'access-north-top', x: 430, y: -520 },
+  { id: 'access-north-bottom', x: 530, y: -100 },
+  { id: 'access-south-top', x: 700, y: 720 },
+  { id: 'access-south-bottom', x: 260, y: 1170 },
+  { id: 'access-east-top', x: 1140, y: 150 },
+  { id: 'access-east-bottom', x: 1810, y: 500 },
+  { id: 'access-west-top', x: -480, y: 100 },
+  { id: 'access-west-bottom', x: -800, y: 530 }
 ] as const;
 export type AccessPanel = { id: string; x: number; y: number; open: boolean };
 export type AccessUse = {
@@ -44,16 +45,16 @@ export type AccessUse = {
 };
 // Coordinates mark the floor directly in front of each cupboard.
 export const CUPBOARD_SPAWNS = [
-  { id: 'centre-left', x: 130, y: 130 },
-  { id: 'centre-right', x: 870, y: 490 },
-  { id: 'north-left', x: 110, y: -470 },
-  { id: 'north-right', x: 870, y: -300 },
-  { id: 'east-bottom', x: 1510, y: 510 },
-  { id: 'east-right', x: 1870, y: 190 },
-  { id: 'south-left', x: 150, y: 810 },
-  { id: 'south-right', x: 870, y: 1120 },
-  { id: 'west-left', x: -850, y: 230 },
-  { id: 'west-bottom', x: -360, y: 520 }
+  { id: 'centre-left', x: 220, y: 160 },
+  { id: 'centre-right', x: 900, y: 550 },
+  { id: 'north-left', x: 110, y: -410 },
+  { id: 'north-right', x: 870, y: -230 },
+  { id: 'east-bottom', x: 1230, y: 560 },
+  { id: 'east-right', x: 1880, y: 240 },
+  { id: 'south-left', x: 150, y: 790 },
+  { id: 'south-right', x: 900, y: 1140 },
+  { id: 'west-left', x: -860, y: 250 },
+  { id: 'west-bottom', x: -300, y: 550 }
 ] as const;
 export type CupboardUse = {
   id: string;
@@ -118,32 +119,32 @@ export const STATIONS = [
     id: 'merge',
     name: 'Resolve a merge conflict',
     room: 'Development',
-    x: 420,
-    y: -350,
+    x: 470,
+    y: -320,
     symbol: '⌘'
   },
   {
     id: 'build',
     name: 'Restart the server',
     room: 'Server cupboard',
-    x: 1550,
-    y: 180,
+    x: 1520,
+    y: 320,
     symbol: '▥'
   },
   {
     id: 'coffee',
     name: 'Refill the coffee machine',
     room: 'Kitchen',
-    x: 730,
-    y: 980,
+    x: 780,
+    y: 930,
     symbol: '☕'
   },
   {
     id: 'ticket',
     name: 'Find the acceptance criteria',
     room: 'Product corner',
-    x: -540,
-    y: 440,
+    x: -520,
+    y: 330,
     symbol: '✓'
   }
 ] as const;
@@ -179,32 +180,34 @@ const boundaryWalls: Wall[] = PAGES.flatMap((page) => {
 });
 export const WALLS: Wall[] = [
   ...boundaryWalls,
-  // Central circulation stays open around the standup table.
-  { x: 315, y: 60, w: 18, h: 125 },
-  { x: 667, y: 60, w: 18, h: 125 },
-  { x: 315, y: 440, w: 18, h: 120 },
-  { x: 667, y: 440, w: 18, h: 120 },
-  // Development: two doors into a work area, with a loop around the partition.
-  { x: 220, y: -440, w: 18, h: 260 },
-  { x: 220, y: -180, w: 210, h: 18 },
-  { x: 560, y: -180, w: 130, h: 18 },
-  { x: 690, y: -440, w: 18, h: 100 },
-  { x: 690, y: -220, w: 18, h: 58 },
-  // Servers: a narrow entrance and a genuine dead-end workstation bay.
-  { x: 1300, y: 80, w: 448, h: 18 },
-  { x: 1300, y: 80, w: 18, h: 160 },
-  { x: 1300, y: 360, w: 18, h: 180 },
-  { x: 1318, y: 360, w: 430, h: 18 },
-  { x: 1730, y: 80, w: 18, h: 280 },
-  // Kitchen: a central island provides two approaches.
-  { x: 360, y: 860, w: 200, h: 100 },
-  { x: 100, y: 1060, w: 260, h: 18 },
-  // Product: offset partitions create a winding corridor and a quiet alcove.
-  { x: -700, y: 150, w: 440, h: 18 },
-  { x: -260, y: 150, w: 18, h: 150 },
-  { x: -700, y: 300, w: 18, h: 210 },
-  { x: -450, y: 300, w: 190, h: 18 }
+  ...PAGES.flatMap((page) =>
+    OFFICE_LAYOUTS[page.id].walls.map((wall) => ({
+      ...wall,
+      x: page.x + wall.x,
+      y: page.y + wall.y
+    }))
+  )
 ];
+export const FIXTURES: Fixture[] = PAGES.flatMap((page) =>
+  OFFICE_LAYOUTS[page.id].fixtures.map((fixture, index) => ({
+    ...FIXTURE_TYPES[fixture.kind],
+    ...fixture,
+    id: `${page.id}-${fixture.kind}-${index}`,
+    x: page.x + fixture.x,
+    y: page.y + fixture.y
+  }))
+);
+export const OFFICE_ZONES = PAGES.flatMap((page) =>
+  OFFICE_LAYOUTS[page.id].zones.map((zone) => ({
+    ...zone,
+    page: page.id,
+    x: page.x + zone.x,
+    y: page.y + zone.y
+  }))
+);
+// Low furniture stops feet, but only walls and tall shelving stop sight and light.
+export const MOVEMENT_BLOCKERS = [...WALLS, ...FIXTURES.filter((fixture) => fixture.blocking)];
+export const SIGHT_BLOCKERS = [...WALLS, ...FIXTURES.filter((fixture) => fixture.opaque)];
 export type Phase = 'lobby' | 'role-reveal' | 'work' | 'meeting' | 'meeting-result' | 'ended';
 export type Role = 'dev' | 'tester';
 export type Person = {
@@ -265,6 +268,8 @@ export type Reply = { error?: string; token?: string; code?: string };
 export function walkable(x: number, y: number) {
   return (
     !!pageAt({ x, y }) &&
-    !WALLS.some((w) => x > w.x - 15 && x < w.x + w.w + 15 && y > w.y - 15 && y < w.y + w.h + 15)
+    !MOVEMENT_BLOCKERS.some(
+      (w) => x > w.x - 15 && x < w.x + w.w + 15 && y > w.y - 15 && y < w.y + w.h + 15
+    )
   );
 }

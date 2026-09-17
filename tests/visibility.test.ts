@@ -28,20 +28,29 @@ test('sight stops at actual walls, but passes clear corners without a collision 
   assert.equal(canSee({ x: 425, y: 280 }, { x: 425, y: 280 }), true);
 });
 
+test('low desks block movement only; tall bookcases block sight and light', () => {
+  assert.equal(walkable(130, 215), false);
+  assert.equal(canSee({ x: 60, y: 215 }, { x: 215, y: 215 }), true);
+  const origin = { x: 900, y: 45 },
+    target = { x: 900, y: 145 };
+  assert.equal(canSee(origin, target), false);
+  assert.equal(insidePolygon(target, lightPolygon(origin)), false);
+});
+
 test('light and server sight agree across partitions, doorways and all five pages', () => {
   for (const origin of [
     { x: 425, y: 280 },
     { x: 290, y: 100 },
     { x: 355, y: 100 },
-    { x: 610, y: -280 },
+    { x: 610, y: -310 },
     { x: 800, y: -10 },
     { x: 800, y: 10 },
     { x: 1338, y: 260 },
     { x: 580, y: 980 },
     { x: -180, y: 310 },
-    { x: -540, y: 440 }
+    { x: -520, y: 330 }
   ]) {
-    assert.ok(walkable(origin.x, origin.y));
+    assert.ok(walkable(origin.x, origin.y), JSON.stringify(origin));
     const polygon = lightPolygon(origin);
     const page = pageAt(origin)!;
     assert.ok(polygon.length >= 3);

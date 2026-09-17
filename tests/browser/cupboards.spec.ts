@@ -74,9 +74,9 @@ test('Tester can hide, see half the normal radius, and leave an open cupboard', 
       await moveTo(page, 500, 750);
       await moveTo(page, cupboard.x, 750);
     } else {
-      await moveTo(page, 1150, 310);
-      await moveTo(page, 1150, 510);
-      await moveTo(page, cupboard.x, 510);
+      await moveTo(page, 1240, 310);
+      await moveTo(page, 1240, 550);
+      await moveTo(page, cupboard.x, 550);
     }
     await moveTo(page, cupboard.x, cupboard.y);
     const cabinet = page.locator(`[data-cupboard-id="${cupboard.id}"]`);

@@ -1,4 +1,30 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function moveAlong(page: Page, axis: 'x' | 'y', target: number) {
+  const coordinate = async () => {
+    const transform = await page
+      .locator('.map-player')
+      .filter({ hasText: '(you)' })
+      .getAttribute('transform');
+    return Number(transform!.match(/-?[\d.]+/g)![axis === 'x' ? 0 : 1]);
+  };
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const start = await coordinate();
+    if (Math.abs(start - target) < 12) return;
+    const key = axis === 'x' ? (start < target ? 'd' : 'a') : start < target ? 's' : 'w';
+    await page.keyboard.down(key);
+    try {
+      await page.waitForTimeout(
+        Math.min(250, Math.max(50, ((Math.abs(start - target) - 8) / 190) * 1000))
+      );
+    } finally {
+      await page.keyboard.up(key);
+    }
+    // Allow the authoritative update and interpolation to settle before the next pulse.
+    await page.waitForTimeout(200);
+  }
+  expect(Math.abs((await coordinate()) - target)).toBeLessThan(12);
+}
 
 test('the tester can send a nearby colleague on training with T when ready', async ({
   browser
@@ -32,9 +58,7 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     const testerPage = pages[testerIndex];
     const trainingButton = testerPage.locator('.context-actions button.sabotage').nth(1);
 
-    await testerPage.keyboard.down(testerIndex < 2 ? 'd' : 'a');
-    await testerPage.waitForTimeout(400);
-    await testerPage.keyboard.up(testerIndex < 2 ? 'd' : 'a');
+    await moveAlong(testerPage, 'x', 500);
     const testerMap = testerPage.locator('.map-panel');
     await expect(testerMap.getByText('E • Call standup', { exact: true })).toBeVisible();
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toHaveCount(0);
@@ -46,9 +70,11 @@ test('the tester can send a nearby colleague on training with T when ready', asy
 
     const nearbyDevIndex = testerIndex < 2 ? testerIndex + 1 : testerIndex - 1;
     // Use the open area south of standup, away from the CI interaction zone.
-    await Promise.all([testerPage.keyboard.down('s'), pages[nearbyDevIndex].keyboard.down('s')]);
-    await testerPage.waitForTimeout(700);
-    await Promise.all([testerPage.keyboard.up('s'), pages[nearbyDevIndex].keyboard.up('s')]);
+    await moveAlong(pages[nearbyDevIndex], 'x', 500);
+    await Promise.all([
+      moveAlong(testerPage, 'y', 430),
+      moveAlong(pages[nearbyDevIndex], 'y', 430)
+    ]);
     await expect(testerMap.getByText('E • Call standup', { exact: true })).toHaveCount(0);
     await expect(testerMap.getByText(/^Training ready in \d+s$/)).toBeVisible();
 
@@ -339,6 +365,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
       })
     );
     await pages[0].screenshot({ path: 'test-results/standup-result-missed.png', fullPage: true });
+    // The map heading remains visible behind the result overlay. Wait for work to resume
+    // before holding a movement key, otherwise the game correctly ignores that keydown.
+    await Promise.all(missedResults.map((result) => expect(result).toBeHidden({ timeout: 5000 })));
     for (const page of pages) await expect(page.getByText('Operation: ship it.')).toBeVisible();
 
     const secondStandupPage = pages[testerIndex];

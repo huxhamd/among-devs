@@ -1,6 +1,7 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
   import MiniTask from '$lib/MiniTask.svelte';
+  import OfficeFixture from '$lib/OfficeFixture.svelte';
   import { fade } from 'svelte/transition';
   import { io, type Socket } from 'socket.io-client';
   import { PositionInterpolator, type InterpolatedPosition } from '$lib/interpolation';
@@ -11,6 +12,8 @@
     ACCESS_REACH,
     STATIONS,
     WALLS,
+    FIXTURES,
+    OFFICE_ZONES,
     PAGES,
     EXITS,
     VISIBILITY_RADIUS,
@@ -972,6 +975,29 @@
                     fill={currentPage.color}
                     opacity=".6"
                   />
+                  {#each OFFICE_ZONES.filter((zone) => zone.page === currentPage.id) as zone}
+                    <rect
+                      x={zone.x}
+                      y={zone.y}
+                      width={zone.w}
+                      height={zone.h}
+                      rx="8"
+                      fill={currentPage.color}
+                      stroke="#a6b4c0"
+                      stroke-opacity=".12"
+                    />
+                    <text
+                      x={zone.x + 12}
+                      y={zone.y + 18}
+                      fill="#aebdca"
+                      opacity=".55"
+                      font-size="10"
+                      letter-spacing="1.5">{zone.label}</text
+                    >
+                  {/each}
+                  {#each FIXTURES.filter((fixture) => pageAt(fixture)?.id === currentPage.id) as fixture (fixture.id)}
+                    <OfficeFixture {fixture} />
+                  {/each}
                   {#each EXITS.filter((exit) => exit.from === currentPage.id) as exit}
                     {@const localX = exit.x - currentPage.x}
                     {@const localY = exit.y - currentPage.y}
@@ -1391,7 +1417,7 @@
                     ? accessLabel
                     : hidden
                       ? 'Hidden in cupboard · Half visibility · E to leave'
-                      : 'Your light shows nearby colleagues. Walls block light and sight.'}
+                      : 'Your light shows nearby colleagues. Walls and tall furniture block light and sight.'}
                 </div>
               {/if}
               <div class="map-footer">
