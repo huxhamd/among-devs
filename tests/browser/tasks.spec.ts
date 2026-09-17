@@ -113,17 +113,47 @@ test('all mini-task controls complete and accepted steps survive refresh', async
       await page.keyboard.press('e');
       const dialog = page.getByRole('dialog');
       await expect(dialog.locator('.mini-task')).toBeVisible();
+      if (station === 'merge' || station === 'ticket') {
+        await page.setViewportSize({ width: 1366, height: 768 });
+        await expect
+          .poll(() =>
+            dialog.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)
+          )
+          .toBe(true);
+        if (station === 'merge') {
+          await page.setViewportSize({ width: 390, height: 740 });
+          const scrolling = await page.evaluate(() => {
+            const backdrop = document.querySelector('.modal-backdrop')!;
+            const modal = document.querySelector('.modal')!;
+            return {
+              html: getComputedStyle(document.documentElement).overflowY,
+              body: getComputedStyle(document.body).overflowY,
+              modal: getComputedStyle(modal).overflowY,
+              backdropFits: backdrop.scrollHeight <= backdrop.clientHeight + 1
+            };
+          });
+          expect(scrolling).toEqual({
+            html: 'hidden',
+            body: 'hidden',
+            modal: 'auto',
+            backdropFits: true
+          });
+          await expect(dialog).toBeInViewport({ ratio: 1 });
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+      }
       const title = await dialog.locator('h3').innerText();
       const definition = TASK_VARIANTS[station].find((variant) => variant.title === title)!;
       await page.screenshot({ path: `test-results/task-${station}.png`, fullPage: true });
       for (const [index, step] of definition.steps.entries()) {
-        await expect(dialog.locator('.task-progress')).toHaveText(`${index} of 4 steps saved`);
+        await expect(dialog.locator('.task-progress')).toHaveText(`${index} / 4 steps complete`);
+        await expect(dialog.locator('.task-progress-segments .complete')).toHaveCount(index);
         if (station === 'merge' && index === 0) {
           await dialog
             .getByRole('button', { name: definition.steps[3].answer, exact: true })
             .click();
           await expect(dialog.getByRole('alert')).toContainText('refinement');
-          await expect(dialog.locator('.task-progress')).toHaveText('0 of 4 steps saved');
+          await expect(dialog.locator('.task-progress')).toHaveText('0 / 4 steps complete');
         }
         await dialog
           .getByRole('button', {
@@ -134,7 +164,7 @@ test('all mini-task controls complete and accepted steps survive refresh', async
         if (definition.kind === 'repair')
           await dialog.getByRole('button', { name: 'Apply setting' }).click();
         if (station === 'merge' && index === 0) {
-          await expect(dialog.locator('.task-progress')).toHaveText('1 of 4 steps saved');
+          await expect(dialog.locator('.task-progress')).toHaveText('1 / 4 steps complete');
           await page.reload();
           await expect(page.locator('.role-tag')).toBeVisible();
           await page.keyboard.press('e');

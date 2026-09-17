@@ -12,12 +12,17 @@
   font-weight: 400;
   line-height: 1.5;
   color-scheme: dark;
+  scrollbar-gutter: stable;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
+}
+html:has(.modal-backdrop),
+body:has(.modal-backdrop) {
+  overflow: hidden;
 }
 button,
 input {
@@ -1098,6 +1103,8 @@ kbd {
   place-items: center;
   z-index: 40;
   padding: 25px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .modal {
   background: #202733;
@@ -1107,8 +1114,9 @@ kbd {
   max-width: 590px;
   width: 100%;
   position: relative;
-  max-height: 90vh;
+  max-height: calc(100dvh - 50px);
   overflow: auto;
+  overscroll-behavior: contain;
   box-shadow: 0 20px 90px #0006;
 }
 .modal.incident-modal {
@@ -1140,6 +1148,15 @@ kbd {
 }
 .modal > .primary {
   margin-top: 15px;
+}
+@media (max-height: 820px) {
+  .modal.workstation-modal {
+    padding: 24px 28px;
+  }
+  .modal.workstation-modal h2 {
+    margin: 10px 0;
+    font-size: 26px;
+  }
 }
 @media (min-width: 1500px) {
   .welcome {

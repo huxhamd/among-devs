@@ -1594,6 +1594,7 @@
       use:focusDialog
       class="modal"
       class:incident-modal={repairing}
+      class:workstation-modal={!repairing}
       role="dialog"
       aria-modal="true"
       aria-label={station.name}

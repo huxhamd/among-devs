@@ -31,7 +31,7 @@ const repair = (title: string, rows: [string, string, string[]][]): TaskDefiniti
 const matching = (title: string, rows: [string, string][]): TaskDefinition => ({
   kind: 'matching',
   title,
-  instructions: 'Attach each acceptance criterion to the ticket it describes.',
+  instructions: 'Match each acceptance criterion to the ticket it describes.',
   steps: rows.map(([label, answer]) => ({ label, answer, options: rows.map((row) => row[1]) }))
 });
 
