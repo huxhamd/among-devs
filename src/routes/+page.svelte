@@ -153,6 +153,9 @@
       : false
   );
   let atConsole = $derived(me && !interactionLocked ? atCiConsole(me) : false);
+  let canUseCiConsole = $derived(
+    me?.active === true && (session?.role === 'tester' || !!session?.incident)
+  );
   let target = $derived(
     me && session && !interactionLocked
       ? nearestWithin(
@@ -1066,10 +1069,11 @@
                       baseY={CI_CONSOLE.y + 53}
                       iconY={CI_CONSOLE.y + 51}
                       baseWidth={240}
-                      active={session.incident}
+                      active={session.incident || me?.active === false}
                       urgent={session.incident}
                       muted={!session.incident}
                       focused={atConsole}
+                      unavailable={atConsole && !canUseCiConsole}
                     />
                     <g transform={`translate(${CI_CONSOLE.x},${CI_CONSOLE.y})`}>
                       <rect
@@ -1079,7 +1083,7 @@
                         height="68"
                         rx="5"
                         fill="#394351"
-                        stroke={atConsole ? '#c3b6ff' : '#83909e'}
+                        stroke={atConsole ? (canUseCiConsole ? '#c3b6ff' : '#687482') : '#83909e'}
                         stroke-width="3"
                       />
                       <rect x="-92" y="-28" width="184" height="52" rx="3" fill="#17212b" />
@@ -1151,9 +1155,10 @@
                         baseY={342}
                         iconY={252}
                         baseWidth={150}
-                        active={!session.incident && !!me?.active}
-                        muted={session.incident || !me?.active}
+                        active={!session.incident}
+                        muted={session.incident}
                         focused={atTable}
+                        unavailable={atTable && me?.active === false}
                       />
                     {/if}
                     <rect
@@ -1168,7 +1173,7 @@
                     /><text x="500" y="317" text-anchor="middle" fill="#e3d6c4" font-size="12"
                       >STANDUP</text
                     >
-                    {#if atTable && me?.active && !report && !trainingTarget}
+                    {#if atTable && !report && !trainingTarget}
                       <g class="context-prompt" transition:fade={{ duration: 180 }}>
                         <rect
                           x="395"
@@ -1177,14 +1182,16 @@
                           height="27"
                           rx="5"
                           fill="#17212b"
-                          stroke="#c3b6ff"
+                          stroke={me?.active ? '#c3b6ff' : '#83909e'}
                         />
                         <text x="500" y="382" text-anchor="middle" fill="#ffffff" font-size="14"
-                          >{!session.meetingsLeft
-                            ? 'No standups remaining'
-                            : session.incident
-                              ? 'CI down — standup blocked'
-                              : 'E • Call standup'}</text
+                          >{!me?.active
+                            ? 'Unavailable during training'
+                            : !session.meetingsLeft
+                              ? 'No standups remaining'
+                              : session.incident
+                                ? 'CI down — standup blocked'
+                                : 'E • Call standup'}</text
                         >
                       </g>
                     {/if}

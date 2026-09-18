@@ -10,7 +10,8 @@
     active = true,
     urgent = false,
     muted = false,
-    focused = false
+    focused = false,
+    unavailable = false
   }: {
     kind: DestinationKind;
     x: number;
@@ -21,6 +22,7 @@
     urgent?: boolean;
     muted?: boolean;
     focused?: boolean;
+    unavailable?: boolean;
   } = $props();
 
   const colours: Record<DestinationKind, string> = {
@@ -37,6 +39,7 @@
   class:urgent
   class:muted
   class:focused
+  class:unavailable
   data-destination={kind}
   style={`--destination-accent: ${colour}`}
   pointer-events="none"
@@ -117,6 +120,19 @@
   .destination-marker.focused .destination-icon-motion {
     animation: none;
     opacity: 0.12;
+  }
+
+  .destination-marker.focused.unavailable {
+    opacity: 0.5;
+  }
+
+  .destination-marker.focused.unavailable .destination-beacon {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  .destination-marker.focused.unavailable .destination-icon-motion {
+    opacity: 0.24;
   }
 
   .destination-pointer {

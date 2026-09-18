@@ -34,9 +34,17 @@ async function moveToStandup(page: Page) {
   await moveAlong(page, 'x', 500);
 }
 
+async function moveToCiConsole(page: Page) {
+  // Pass the standup table on its right before approaching the console.
+  await moveAlong(page, 'x', 620);
+  await moveAlong(page, 'y', 100);
+  await moveAlong(page, 'x', 500);
+}
+
 test('the tester can send a nearby colleague on training with T when ready', async ({
   browser
 }) => {
+  test.setTimeout(90_000);
   const names = ['Ada', 'Linus', 'Grace', 'Ken'];
   const contexts = await Promise.all(names.map(() => browser.newContext()));
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
@@ -100,6 +108,26 @@ test('the tester can send a nearby colleague on training with T when ready', asy
     await testerPage.keyboard.press('t');
     await expect(pages[targetIndex].locator('.role-tag')).toContainText('ON TRAINING');
     await expect(trainingButton).toBeDisabled();
+
+    const traineePage = pages[targetIndex];
+    const traineeMap = traineePage.locator('.map-panel');
+    await expect(traineeMap.locator('[data-destination="standup"]')).toHaveClass(/active/);
+    await expect(traineeMap.locator('[data-destination="ci"]')).toHaveClass(/active/);
+
+    await moveToStandup(traineePage);
+    await expect(
+      traineeMap.getByText('Unavailable during training', { exact: true })
+    ).toBeVisible();
+    await expect(traineeMap.locator('[data-destination="standup"]')).toHaveClass(
+      /active.*focused.*unavailable/
+    );
+
+    await moveToCiConsole(traineePage);
+    await expect(traineeMap.getByText('CI operational ✓', { exact: true })).toBeVisible();
+    await expect(traineeMap.locator('[data-destination="ci"]')).toHaveClass(
+      /active.*focused.*unavailable/
+    );
+
     await expect(
       testerPage.getByRole('button', { name: 'Report training notice • E', exact: true })
     ).toBeVisible();
@@ -203,6 +231,8 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     } finally {
       await repairPage.keyboard.up('w');
     }
+    await expect(repairPage.locator('[data-destination="ci"]')).toHaveClass(/focused/);
+    await expect(repairPage.locator('[data-destination="ci"]')).not.toHaveClass(/unavailable/);
     await expect(
       repairPage.getByRole('button', { name: 'Repair CI • E', exact: true })
     ).toBeVisible();
@@ -321,6 +351,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(
       repairPage.locator('.map-panel').getByText('CI operational ✓', { exact: true })
     ).toBeVisible();
+    await expect(repairPage.locator('[data-destination="ci"]')).toHaveClass(/focused.*unavailable/);
+    await expect(testerMap.locator('[data-destination="ci"]')).toHaveClass(/focused/);
+    await expect(testerMap.locator('[data-destination="ci"]')).not.toHaveClass(/unavailable/);
     await expect(repairPage.getByRole('button', { name: 'Repair CI', exact: true })).toHaveCount(0);
     await expect(breakCiButton).toBeDisabled();
     await expect(breakCiButton).toContainText('Break CI ready in');
