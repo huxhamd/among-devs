@@ -112,6 +112,19 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
       await tester.evaluate(() => window.scrollTo(0, 300));
       await expect.poll(() => tester.evaluate(() => window.scrollY)).toBeGreaterThan(0);
       await expect(tester.locator('.game-hud')).toBeInViewport({ ratio: 1 });
+      const stickyClearance = await tester.locator('.game-hud').evaluate((element) => {
+        const hud = element.getBoundingClientRect();
+        const banner = element.querySelector('.ci-banner')!.getBoundingClientRect();
+        const paddingBottom = Number.parseFloat(getComputedStyle(element).paddingBottom);
+        return {
+          actual: hud.bottom - banner.bottom,
+          expected: paddingBottom,
+          painted: document.elementFromPoint(hud.left + hud.width / 2, hud.bottom - 1) === element
+        };
+      });
+      expect(stickyClearance.expected).toBeGreaterThanOrEqual(8);
+      expect(stickyClearance.actual).toBeCloseTo(stickyClearance.expected);
+      expect(stickyClearance.painted).toBe(true);
       expect(await tester.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         viewport.width
       );

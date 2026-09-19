@@ -894,8 +894,7 @@
               <span class="ci-banner-icon" aria-hidden="true">!</span>
               <div class="ci-banner-copy">
                 <strong>CI is down · {session.repair?.step ?? 0}/3 repair steps saved</strong><span
-                  >Go to the CI Control Console at the top of the central office and press E to
-                  repair CI. An active colleague must restore CI before tickets can continue.</span
+                  >Go to the CI Control Console at the top of the central office.</span
                 >
               </div>
             </div>

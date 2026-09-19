@@ -193,6 +193,19 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     const ciBanner = repairPage.locator('.ci-banner');
     await expect(ciBanner.locator('.online')).toBeVisible();
     await expect(ciBanner.locator('.outage')).toBeHidden();
+    const bannerShape = await ciBanner.evaluate((element) => {
+      const banner = element.getBoundingClientRect();
+      const icon = element.querySelector('.ci-banner-icon')!.getBoundingClientRect();
+      const bar = getComputedStyle(element, '::before');
+      const barTop = Number.parseFloat(bar.top);
+      const barBottom = banner.height - Number.parseFloat(bar.bottom);
+      return {
+        topProtrusion: barTop - (icon.top - banner.top),
+        bottomProtrusion: icon.bottom - banner.top - barBottom
+      };
+    });
+    expect(bannerShape.topProtrusion).toBeGreaterThan(0);
+    expect(bannerShape.bottomProtrusion).toBeCloseTo(bannerShape.topProtrusion);
     const mapTopBeforeIncident = await repairPage
       .locator('.map-panel')
       .evaluate((element) => element.getBoundingClientRect().top);
@@ -213,8 +226,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(ciBanner).toHaveClass(/offline/);
     await expect(ciBanner.locator('.online')).toBeHidden();
     await expect(ciBanner.locator('.outage')).toContainText(
-      'An active colleague must restore CI before tickets can continue.'
+      'Go to the CI Control Console at the top of the central office.'
     );
+    await expect(ciBanner.locator('.outage')).not.toContainText('press E');
     await expect(ciBanner.locator('.outage')).toBeVisible();
     const mapTopDuringIncident = await repairPage
       .locator('.map-panel')

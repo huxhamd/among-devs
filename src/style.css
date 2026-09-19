@@ -658,35 +658,45 @@ footer > span:first-child {
   margin-left: 5px;
 }
 .ci-banner {
+  position: relative;
   display: grid;
   margin-bottom: 15px;
-  overflow: hidden;
+  color: #bde8ce;
+  transition: color 0.2s;
+}
+.ci-banner::before {
+  content: '';
+  position: absolute;
+  inset: 2px 0;
   background: #24382f;
   border: 1px solid #436654;
   border-radius: 9px;
-  color: #bde8ce;
   box-shadow: inset 4px 0 #79bf98;
   transition:
     background-color 0.2s,
     border-color 0.2s,
-    color 0.2s,
     box-shadow 0.2s;
 }
 .ci-banner.offline {
+  color: #ffd4da;
+}
+.ci-banner.offline::before {
   background: #4a2e36;
   border-color: #9b5261;
-  color: #ffd4da;
   box-shadow:
     inset 4px 0 #f0808f,
     0 0 24px #a13d4f20;
 }
 .ci-banner-message {
+  position: relative;
+  z-index: 1;
   grid-area: 1 / 1;
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr);
   align-items: center;
   gap: 11px;
-  padding: 11px 16px;
+  min-height: 30px;
+  padding: 0 16px;
   opacity: 0;
   visibility: hidden;
 }
@@ -695,8 +705,9 @@ footer > span:first-child {
   visibility: visible;
 }
 .ci-banner-icon {
-  width: 24px;
-  height: 24px;
+  position: relative;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   background: #79bf98;
@@ -1534,7 +1545,7 @@ kbd {
   z-index: 10;
   display: grid;
   gap: 8px;
-  margin-bottom: 10px;
+  padding-bottom: 10px;
   background: #11151c;
 }
 .game-hud .status-strip {
@@ -1618,6 +1629,9 @@ kbd {
   .in-round .workspace > .banner {
     flex-shrink: 0;
     margin: 0;
+  }
+  .in-round .game-hud {
+    padding-bottom: 0;
   }
   .in-round .play-layout,
   .in-round .meeting {
