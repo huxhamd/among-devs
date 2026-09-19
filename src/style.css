@@ -90,6 +90,7 @@ header {
   font-size: 32px;
   border-radius: 10px;
   line-height: 1;
+  padding: 0;
 }
 .brand-icon span {
   color: #636079;
@@ -97,6 +98,9 @@ header {
 .brand-light {
   font-weight: 400;
   color: #b3b7c0;
+}
+.brand-name {
+  display: inline-flex;
 }
 .badge {
   font-size: 9px;
@@ -1188,6 +1192,95 @@ kbd {
   width: min(780px, 100%);
   max-width: 780px;
 }
+.maker-backdrop {
+  z-index: 70;
+}
+.modal.maker-card {
+  width: min(440px, 100%);
+  padding: 46px 42px 40px;
+  overflow: hidden;
+  text-align: center;
+  background: radial-gradient(circle at 50% 0, #c3b6ff1c, transparent 46%), #1b2029;
+  border-color: #c3b6ff42;
+  box-shadow:
+    0 24px 90px #0008,
+    inset 0 1px #ffffff0a;
+  animation: maker-arrive 0.32s ease-out both;
+}
+.maker-card::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#ffffff05 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff05 1px, transparent 1px);
+  background-size: 28px 28px;
+  content: '';
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+.maker-card > * {
+  position: relative;
+}
+.maker-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 25px;
+  color: #1c1c26;
+  background: #c3b6ff;
+  border-radius: 20px;
+  box-shadow: 0 12px 45px #c3b6ff29;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -2px;
+}
+.maker-mark span {
+  color: #636079;
+}
+.maker-card .eyebrow {
+  justify-content: center;
+  color: #9991bc;
+}
+.modal.maker-card h2 {
+  margin: 14px 0 8px;
+  font-size: clamp(28px, 6vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -1.4px;
+}
+.maker-card h2 em {
+  display: block;
+  color: #d8d0ff;
+  font-style: normal;
+}
+.modal.maker-card p {
+  margin: 0;
+  color: #9fa8b5;
+}
+.maker-build {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  margin-top: 29px;
+  color: #757f8f;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.25px;
+  text-transform: uppercase;
+}
+.maker-build i {
+  width: 3px;
+  height: 3px;
+  background: #c3b6ff;
+  border-radius: 50%;
+}
+@keyframes maker-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+}
 .modal h2 {
   font-size: 28px;
   letter-spacing: -1px;
@@ -1594,6 +1687,9 @@ kbd {
   }
   .role-reveal-card,
   .meeting-result-card {
+    animation: none;
+  }
+  .maker-card {
     animation: none;
   }
 }

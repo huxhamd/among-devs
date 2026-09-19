@@ -60,6 +60,9 @@
   }
   let copied = $state(false);
   let help = $state(false);
+  let maker = $state(false);
+  let brandClicks = 0;
+  let brandResetTimer: ReturnType<typeof setTimeout> | undefined;
   const keys = new Set<string>();
   const noticePauseReasons = new Set<'pointer' | 'focus'>();
   const NOTICE_DURATION = 4000;
@@ -118,6 +121,17 @@
     if (!id || (cupboardUse && !hidden)) return;
     keys.clear();
     act({ type: 'cupboard', id });
+  }
+  function uncoverMaker() {
+    clearTimeout(brandResetTimer);
+    brandClicks++;
+    if (brandClicks === 7) {
+      brandClicks = 0;
+      maker = true;
+      keys.clear();
+      return;
+    }
+    brandResetTimer = setTimeout(() => (brandClicks = 0), 3000);
   }
   let lightPoints = $derived(
     limitedVision && lightPosition
@@ -497,6 +511,7 @@
       if (key === 'escape') {
         stationId = '';
         help = false;
+        maker = false;
       }
       if (
         key === 'b' &&
@@ -602,6 +617,7 @@
       clearInterval(timer);
       cancelAnimationFrame(animationFrame);
       clearTimeout(noticeTimer);
+      clearTimeout(brandResetTimer);
       socket.disconnect();
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
@@ -619,10 +635,15 @@
 
 <div class="app-shell" class:in-round={inRound} class:results-view={session?.phase === 'ended'}>
   <header>
-    <a class="brand" href="/" aria-label="Among Devs home"
-      ><span class="brand-icon">a<span>.</span></span> among<span class="brand-light">devs</span
-      ><span class="badge">SPRINT ZERO</span></a
-    >
+    <div class="brand">
+      <button class="brand-icon" type="button" aria-label="Among Devs logo" onclick={uncoverMaker}
+        >a<span>.</span></button
+      >
+      <a class="brand-name" href="/" aria-label="Among Devs home"
+        >among<span class="brand-light">devs</span></a
+      >
+      <span class="badge">SPRINT ZERO</span>
+    </div>
     <div class="header-actions">
       <span class:offline={!connected} class="connection"
         ><i></i>{connected ? 'Workspace online' : 'Connecting…'}</span
@@ -1813,6 +1834,33 @@
         you have already begun exiting.
       </p>
       <button class="primary" onclick={() => (help = false)}>Sounds suspicious. I’m in.</button>
+    </div>
+  </div>
+{/if}
+
+{#if maker}
+  <div class="modal-backdrop maker-backdrop">
+    <div
+      use:focusDialog
+      class="modal maker-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="maker-title"
+      aria-describedby="maker-note maker-build"
+      tabindex="-1"
+    >
+      <button class="close quiet" onclick={() => (maker = false)} aria-label="Close maker card"
+        >×</button
+      >
+      <div class="maker-mark" aria-hidden="true">dh<span>.</span></div>
+      <div class="eyebrow">THE PERSON BEHIND THE PROCESS</div>
+      <h2 id="maker-title">Crafted by <em>Daniel Huxham</em></h2>
+      <p id="maker-note">A small thing, thoughtfully made.</p>
+      <div id="maker-build" class="maker-build">
+        <span>Version {__APP_VERSION__}</span><i aria-hidden="true"></i><span
+          >Build {__BUILD_DATE__}</span
+        >
+      </div>
     </div>
   </div>
 {/if}
