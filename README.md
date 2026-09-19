@@ -67,7 +67,7 @@ Builds run without Azure access or package-write permission. The privileged depl
 
 Azure login uses OIDC federation with environment `among-devs-play`, restricted to the `master` branch. Deploy, preview, health and destroy jobs share one concurrency group and do not cancel an operation already running. GitHub may replace older pending jobs with newer ones; use the workflow run page to confirm which request executed. No PAT, registry password or Azure client secret is stored in the repository.
 
-The Bicep deployment stack owns a Consumption Container Apps environment and one Container App in `rg-among-devs-uks`. Anonymous public image pulls require no runtime managed identity. The existing deployment identity `id-ado-among-devs` is reused (the name is historical), with Contributor access to this app's resource group. After cutover, obsolete ACR roles, the old ADO federation and runtime-identity attachment permission can be removed. Persistent identities remain outside the app stack.
+The Bicep deployment stack owns a Consumption Container Apps environment and one Container App in `rg-among-devs-uks`. Anonymous public image pulls require no runtime managed identity. The existing deployment identity `id-ado-among-devs` is reused (the name is historical), with Contributor access to this app's resource group. The old ADO federation and runtime-identity attachment permission have been removed; deleting ACR removes its scoped role assignments. Persistent identities remain outside the app stack.
 
 The app uses UK South, 0.25 vCPU, 0.5 GiB memory, zero minimum replicas and one maximum replica. Deployment and scale-to-zero lose in-memory games. Deploy between sessions and close connected browsers when finished. Every deployment verifies the page, health endpoint and three WebSocket lobby joins; the HTTPS URL is printed in the log.
 
@@ -77,7 +77,7 @@ An administrator with existing GitHub CLI and personal Azure CLI access runs `sc
 
 The prerequisite Azure resource group and deployment identity must already exist, with Contributor on `rg-among-devs-uks` and the `Microsoft.App` provider registered. The scripts reject any subscription except `968d16ad-8f5a-4608-aaca-1facd4121402` and tenant `72e6af23-d94b-40db-ad70-1c01042f48c1`.
 
-GitHub initially creates container packages as private. After the first publication, open the [package settings](https://github.com/users/huxhamd/packages/container/among-devs/settings) and set visibility to **Public**, then re-run the failed deployment job. This is a one-time package setting. The workflow deliberately stops before changing Azure if anonymous pulling fails.
+If a new container package is private after its first publication, open the [package settings](https://github.com/users/huxhamd/packages/container/among-devs/settings) and set visibility to **Public**, then re-run the failed deployment job. This is a one-time package setting. The workflow deliberately stops before changing Azure if anonymous pulling fails.
 
 ### Cost, inactivity and teardown
 

@@ -9,7 +9,7 @@ try {
     # Anonymous registry token: no GitHub credential or Docker login is used.
     $token = (Invoke-RestMethod 'https://ghcr.io/token?service=ghcr.io&scope=repository:huxhamd/among-devs:pull').token
     if (-not $token) { throw 'No anonymous pull token returned.' }
-    $null = Invoke-WebRequest "https://ghcr.io/v2/huxhamd/among-devs/manifests/$digest" -Method Head -Headers @{
+    $null = Invoke-WebRequest "https://ghcr.io/v2/huxhamd/among-devs/manifests/$digest" -UseBasicParsing -Method Head -Headers @{
         Authorization = "Bearer $token"
         Accept = 'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'
     }
