@@ -186,9 +186,12 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     expect(testerIndex).toBeGreaterThanOrEqual(0);
     const repairIndex = pages.findIndex((_, index) => index !== 0 && index !== testerIndex);
     const repairPage = pages[repairIndex];
-    await expect(
-      repairPage.locator('.map-panel').getByText('CI operational', { exact: true })
-    ).toBeVisible();
+    const repairMap = repairPage.locator('.map-panel');
+    const doorwayMarker = repairMap.locator('.doorway-marker').first();
+    const doorwayLabel = repairMap.locator('.doorway-label').first();
+    await expect(repairMap.getByText('CI operational', { exact: true })).toBeVisible();
+    await expect(doorwayMarker).toHaveCSS('fill', 'rgb(94, 234, 212)');
+    await expect(doorwayLabel).toHaveCSS('fill', 'rgb(157, 231, 215)');
     await expect(repairPage.getByText('Restart the server', { exact: true }).first()).toBeVisible();
     const ciBanner = repairPage.locator('.ci-banner');
     await expect(ciBanner.locator('.online')).toBeVisible();
@@ -230,6 +233,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     );
     await expect(ciBanner.locator('.outage')).not.toContainText('press E');
     await expect(ciBanner.locator('.outage')).toBeVisible();
+    await expect(repairMap).toHaveClass(/ci-incident/);
+    await expect(doorwayMarker).toHaveCSS('fill', 'rgb(240, 128, 143)');
+    await expect(doorwayLabel).toHaveCSS('fill', 'rgb(255, 212, 218)');
     const mapTopDuringIncident = await repairPage
       .locator('.map-panel')
       .evaluate((element) => element.getBoundingClientRect().top);
@@ -362,6 +368,9 @@ test('three colleagues join, move, vote, reconnect and return to the lobby', asy
     await expect(ciBanner).not.toHaveClass(/offline/);
     await expect(ciBanner.locator('.online')).toBeVisible();
     await expect(ciBanner.locator('.outage')).toBeHidden();
+    await expect(repairMap).not.toHaveClass(/ci-incident/);
+    await expect(doorwayMarker).toHaveCSS('fill', 'rgb(94, 234, 212)');
+    await expect(doorwayLabel).toHaveCSS('fill', 'rgb(157, 231, 215)');
     await expect(
       repairPage.locator('.map-panel').getByText('CI operational ✓', { exact: true })
     ).toBeVisible();

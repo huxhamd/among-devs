@@ -939,7 +939,7 @@
           </section>
         {:else}
           <div class="play-layout">
-            <section class="map-panel">
+            <section class:ci-incident={session.incident} class="map-panel">
               <svg
                 viewBox={`${currentPage.x} ${currentPage.y} 1000 620`}
                 preserveAspectRatio="xMidYMid meet"
@@ -1060,14 +1060,14 @@
                     {@const labelX = exit.vertical ? exit.x + (localX === 0 ? 35 : -35) : exit.x}
                     {@const labelY = exit.vertical ? exit.y : exit.y + (localY === 0 ? 35 : -25)}
                     <rect
+                      class="doorway-marker"
                       x={exit.x - (exit.vertical ? 14 : 55)}
                       y={exit.y - (exit.vertical ? 55 : 14)}
                       width={exit.vertical ? 28 : 110}
                       height={exit.vertical ? 110 : 28}
-                      fill="#5eead4"
-                      opacity=".25"
                     />
                     <text
+                      class="doorway-label"
                       x={labelX}
                       y={labelY}
                       transform={exit.vertical
@@ -1075,7 +1075,6 @@
                         : undefined}
                       text-anchor="middle"
                       dominant-baseline={exit.vertical ? 'middle' : undefined}
-                      fill="#9de7d7"
                       font-size="14">{label}</text
                     >
                   {/each}

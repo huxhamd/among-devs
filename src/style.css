@@ -744,15 +744,30 @@ footer > span:first-child {
   gap: 18px;
 }
 .map-panel {
+  --doorway-marker: #5eead4;
+  --doorway-label: #9de7d7;
   border: 1px solid #ffffff12;
   border-radius: 12px;
   background: #202631;
   overflow: hidden;
   align-self: start;
 }
+.map-panel.ci-incident {
+  --doorway-marker: #f0808f;
+  --doorway-label: #ffd4da;
+}
 .map-panel svg {
   display: block;
   width: 100%;
+}
+.doorway-marker {
+  fill: var(--doorway-marker);
+  opacity: 0.25;
+  transition: fill 240ms ease;
+}
+.doorway-label {
+  fill: var(--doorway-label);
+  transition: fill 240ms ease;
 }
 .room-label {
   font-size: 11px;
@@ -1696,6 +1711,10 @@ kbd {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .doorway-marker,
+  .doorway-label {
+    transition: none;
+  }
   .toast-progress {
     display: none;
   }
