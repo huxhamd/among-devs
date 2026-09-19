@@ -1,14 +1,8 @@
 @description('Azure region for the Container App resources.')
 param location string = resourceGroup().location
 
-@description('Immutable image published to the shared registry.')
+@description('Public GHCR image pinned by digest.')
 param image string
-
-@description('Resource ID of the persistent runtime user-assigned identity.')
-param runtimeIdentityResourceId string
-
-@description('Shared registry login server.')
-param registryLoginServer string
 
 param appName string = 'among-devs'
 param targetPort int = 3000
@@ -30,10 +24,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'ca-${appName}'
   location: location
   identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${runtimeIdentityResourceId}': {}
-    }
+    type: 'None'
   }
   properties: {
     managedEnvironmentId: environment.id
@@ -46,12 +37,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      registries: [
-        {
-          server: registryLoginServer
-          identity: runtimeIdentityResourceId
-        }
-      ]
+      registries: []
     }
     template: {
       containers: [

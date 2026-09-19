@@ -52,48 +52,50 @@ docker run --rm -p 3000:3000 -e ORIGIN=http://localhost:3000 among-devs
 
 The multi-stage image runs checks, tests and the build, then runs as the unprivileged Node user with only production dependencies. On a public hostname, set `ORIGIN` to that exact HTTPS origin, without a trailing slash. Behind Azure's trusted ingress, the Bicep template uses forwarded protocol/host headers instead.
 
-## Azure pipelines (personal environment)
+## GitHub Actions (personal environment)
 
-The app stays in GitHub at `huxhamd/among-devs`. Azure DevOps project `danhuxham/among-devs` runs these pipelines:
+Application CI/CD runs in [GitHub Actions](https://github.com/huxhamd/among-devs/actions). Public images live at `ghcr.io/huxhamd/among-devs`. The retired Azure DevOps definitions in `danhuxham/among-devs` are disabled; this app no longer depends on the shared ACR.
 
-| Pipeline                | YAML                           | Behaviour                                                                                                                                                            |
-| ----------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build and deploy        | `azure-pipelines.yml`          | Every branch push and PR to `master` checks, tests, builds and smoke-tests the container. Only `master` deploys. Run manually on `master` to stand the app up again. |
-| Validate infrastructure | `azure-pipelines.validate.yml` | Manual Bicep compilation and Azure what-if; does not deploy.                                                                                                         |
-| Destroy                 | `azure-pipelines.destroy.yml`  | Manual; requires `DESTROY-among-devs` and runs from `master`.                                                                                                        |
-| Monthly health          | `azure-pipelines.health.yml`   | First day of each month at 07:00 UTC, or manually. Checks Azure access, the registry, and what-if. Works while the app is torn down.                                 |
+| Workflow                | Behaviour                                                                                                                                                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build and deploy        | Every branch push and PR to `master` checks, tests, builds and smoke-tests the production container. Only trusted `master` pushes or manual runs publish and deploy. Run manually on `master` to recreate a destroyed app. |
+| Infrastructure: Preview | Manual Bicep compilation and Azure what-if; no deployment.                                                                                                                                                                 |
+| Infrastructure: Health  | Monthly on the first day at 07:00 UTC, or manually. Verifies Azure access, anonymous access to the deployed GHCR digest, and what-if. Does not request or wake the app. Works while torn down.                             |
+| Infrastructure: Destroy | Manual on `master`; requires `DESTROY-among-devs`. Removes the application deployment stack's runtime resources.                                                                                                           |
 
-The application infrastructure in `infra/main.bicep` follows the platform Container App template while using pre-provisioned identities. This keeps pipeline permissions scoped to this application's resource group and avoids giving a pipeline permission to assign Azure roles. The orchestration supports `master`, Node 24, and the custom Socket.IO entry point. The existing Dockerfile runs checks and tests, builds both `build/` and `dist/`, and runs `dist/server.js` as the unprivileged Node user. The deployment loads the exact image tested by the build stage; it does not rebuild it.
+Builds run without Azure access or package-write permission. The privileged deployment job downloads the exact tested image from the same workflow run, publishes it using GitHub's automatic short-lived `GITHUB_TOKEN`, verifies anonymous pulling, then deploys its immutable digest. There is no rebuild between testing and deployment. Image tags identify source commits; Azure uses the digest even if a tag is later republished. Image artifacts expire after one day; re-run the full workflow if its artifact has expired.
 
-The application deployment stack owns a Consumption Container Apps environment and one Container App in `rg-among-devs-uks`. Persistent identity `id-runtime-among-devs` has `AcrPull` on the existing shared registry `acrplayobbyonpr53zda`; deployment identity `id-ado-among-devs` has `Contributor` only on the app resource group, `AcrPush` and `Reader` only on the registry, and `Managed Identity Operator` only on the runtime identity. There are no registry passwords, database, or saved Log Analytics logs. Destruction removes the app runtime resources while retaining the empty resource group, identities, registry, and pushed images. No shared infrastructure changes are required.
+Azure login uses OIDC federation with environment `among-devs-play`, restricted to the `master` branch. Deploy, preview, health and destroy jobs share one concurrency group and do not cancel an operation already running. GitHub may replace older pending jobs with newer ones; use the workflow run page to confirm which request executed. No PAT, registry password or Azure client secret is stored in the repository.
 
-The app uses UK South, 0.25 vCPU, 0.5 GiB memory, a minimum of zero replicas and a maximum of one. Deployments and scale-to-zero lose in-memory games. Deploy between sessions, and close connected browsers when finished. Each deployment verifies the page, `/healthz`, and three WebSocket lobby joins; the HTTPS URL is printed in the deployment log. The monthly health pipeline makes no request to the application and never deploys it.
+The Bicep deployment stack owns a Consumption Container Apps environment and one Container App in `rg-among-devs-uks`. Anonymous public image pulls require no runtime managed identity. The existing deployment identity `id-ado-among-devs` is reused (the name is historical), with Contributor access to this app's resource group. After cutover, obsolete ACR roles, the old ADO federation and runtime-identity attachment permission can be removed. Persistent identities remain outside the app stack.
 
-### One-time Azure DevOps setup
+The app uses UK South, 0.25 vCPU, 0.5 GiB memory, zero minimum replicas and one maximum replica. Deployment and scale-to-zero lose in-memory games. Deploy between sessions and close connected browsers when finished. Every deployment verifies the page, health endpoint and three WebSocket lobby joins; the HTTPS URL is printed in the log.
 
-- Connect GitHub repository `huxhamd/among-devs` using the authorized GitHub service connection `github.com_huxhamd` and create the four pipeline definitions above, with default branch `refs/heads/master`.
-- Create workload-federated ARM service connection `sc-play-among-devs` targeting personal tenant `72e6af23-d94b-40db-ad70-1c01042f48c1`, subscription `968d16ad-8f5a-4608-aaca-1facd4121402`. The scripts refuse any other tenant or subscription.
-- Grant its identity `Contributor` on `rg-among-devs-uks`, `AcrPush` and `Reader` on the shared registry, and `Managed Identity Operator` on `id-runtime-among-devs`. `Reader` lets the pipeline verify the registry login server and disabled admin account; `Managed Identity Operator` lets it attach only that runtime identity to the app. The pipeline does not receive subscription-wide access or permission to manage Azure roles. Keep the ACR admin account disabled. Authorize only these four pipelines to use the connection.
-- Register the `Microsoft.App` resource provider in the personal subscription once.
-- Create environment `among-devs-play`, authorize the build/deploy and destroy pipelines, and add an **Exclusive lock** check. Both YAML files request sequential locking so teardown and deployment cannot run concurrently.
-- Confirm Microsoft-hosted Linux agent capacity is available. Keep fork builds from receiving secrets or privileged pipeline access. Set short run retention to avoid retaining unnecessary image artifacts.
+### One-time setup
 
-### Cost and teardown
+An administrator with existing GitHub CLI and personal Azure CLI access runs `scripts/setup-github.ps1`. It uses only `az-play`, checks the personal tenant and subscription, configures the GitHub environment's master-only policy, adds federation to the existing deployment identity, and sets three non-secret environment variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`. It reads the repository's actual OIDC subject prefix, including immutable IDs where enabled. No recurring administrator login is needed for workflows.
 
-The target is at most £5/month of additional usage, excluding the already-deployed shared registry. Consumption has a subscription-wide free allowance; a zero-replica app incurs no compute consumption charge. This is a usage-based service, so £5 is a target, not an enforced spending cap. See [Azure Container Apps billing](https://learn.microsoft.com/en-us/azure/container-apps/billing).
+The prerequisite Azure resource group and deployment identity must already exist, with Contributor on `rg-among-devs-uks` and the `Microsoft.App` provider registered. The scripts reject any subscription except `968d16ad-8f5a-4608-aaca-1facd4121402` and tenant `72e6af23-d94b-40db-ad70-1c01042f48c1`.
 
-Use **Destroy** when finished and **Build and deploy** on `master` when needed again. A later push to `master` also recreates a destroyed app. Image tags are commit SHAs and remain in the shared registry after teardown; prune obsolete `among-devs` images if storage accumulates, keeping images needed for rollback. A budget alert can notify you about spend, but does not stop resources automatically.
+GitHub initially creates container packages as private. After the first publication, open the [package settings](https://github.com/users/huxhamd/packages/container/among-devs/settings) and set visibility to **Public**, then re-run the failed deployment job. This is a one-time package setting. The workflow deliberately stops before changing Azure if anonymous pulling fails.
+
+### Cost, inactivity and teardown
+
+Public GHCR images can be pulled anonymously. GHCR storage and bandwidth are currently free; standard GitHub-hosted Actions runners are free for this public repository. Azure Consumption remains usage-based, with a target of at most £5/month, not an enforced spending cap. No standing-charge registry is required. See [GHCR billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages), [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), and [Azure Container Apps billing](https://learn.microsoft.com/en-us/azure/container-apps/billing).
+
+GitHub automatically disables scheduled workflows in public repositories after 60 days without repository activity. After a long break, enable the Infrastructure workflow if necessary (`gh workflow enable infrastructure.yml`), then run Health or Preview. Build and deploy is a separate workflow with push/manual triggers. No credentials need renewing, but tooling, dependencies and provider policies can still change over time. See [GitHub's inactivity rule](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows).
+
+Use Infrastructure / Destroy when finished and Build and deploy on `master` when needed again. A push to `master` also recreates a destroyed app. Teardown retains the empty app resource group, deployment identity and GHCR images. Keep digests required for rollback when pruning old package versions. The central platform's ACR code is retained with automatic deployment disabled; intentionally restoring it is a separate operation.
 
 ### Local infrastructure preview
 
-Use `az-play` locally; never switch the default Azure CLI profile. In Azure Pipelines, `AzureCLI@2` supplies an isolated service-connection login and the same script verifies its tenant and subscription.
+Use `az-play` locally; never switch the default Azure CLI profile. The default script command is already `az-play`. Preview and Health use the deployed digest, or a non-deployed placeholder when the application is torn down. To preview a different image, set `CONTAINER_IMAGE` to a public `ghcr.io/huxhamd/among-devs@sha256:...` reference.
 
 ```powershell
-$env:IMAGE_TAG = git rev-parse HEAD
-& .\scripts\infra.ps1 -Mode Preview
+& ./scripts/infra.ps1 -Mode Preview
 ```
 
-`node scripts/smoke.mjs https://YOUR-APP-HOSTNAME` can also be run with Node 24 after `npm ci` to verify a running deployment.
+`node scripts/smoke.mjs https://YOUR-APP-HOSTNAME` can be run with Node 24 after `npm ci` to verify a running deployment.
 
 ## Scope and tradeoffs
 

@@ -3,6 +3,8 @@ node_modules
 build
 dist
 .git
+.github
+among-devs.tar.gz
 .env*
 test-results
 .npm-cache

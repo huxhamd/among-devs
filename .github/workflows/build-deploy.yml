@@ -1,0 +1,114 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/huxhamd/among-devs
+
+jobs:
+  build:
+    name: Build and smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+      - name: Test infrastructure guards without cloud access
+        shell: pwsh
+        run: ./tests/infra.tests.ps1
+      - name: Compile infrastructure, build and test the production image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          az bicep build --file infra/main.bicep --stdout > /dev/null
+          npm ci
+          docker build --label org.opencontainers.image.source=https://github.com/huxhamd/among-devs --label "org.opencontainers.image.revision=$IMAGE_TAG" --tag "among-devs:$IMAGE_TAG" .
+          docker run --detach --name among-devs-smoke --publish 3000:3000 --env ORIGIN=http://localhost:3000 "among-devs:$IMAGE_TAG"
+          trap 'docker logs among-devs-smoke; docker rm --force among-devs-smoke' EXIT
+          node scripts/smoke.mjs http://localhost:3000
+      - name: Export tested image
+        if: github.repository == 'huxhamd/among-devs' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker save "among-devs:$IMAGE_TAG" | gzip > among-devs.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.repository == 'huxhamd/among-devs' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        with:
+          name: tested-image
+          path: among-devs.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  deploy:
+    name: Publish and deploy
+    needs: build
+    if: github.repository == 'huxhamd/among-devs' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: among-devs-play
+    concurrency:
+      group: among-devs-play
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: tested-image
+      - name: Publish the exact tested image
+        id: publish
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker load --input among-devs.tar.gz
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker tag "among-devs:$IMAGE_TAG" "$IMAGE_REPOSITORY:$IMAGE_TAG"
+          docker push "$IMAGE_REPOSITORY:$IMAGE_TAG"
+          image=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE_REPOSITORY:$IMAGE_TAG")
+          [[ "$image" =~ ^ghcr.io/huxhamd/among-devs@sha256:[a-f0-9]{64}$ ]]
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "Published: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify public pull using an empty Docker credential directory
+        env:
+          CONTAINER_IMAGE: ${{ steps.publish.outputs.image }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/anonymous-docker"
+          docker --config "$RUNNER_TEMP/anonymous-docker" pull "$CONTAINER_IMAGE"
+      - uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Install smoke-test client
+        run: npm ci --omit=dev
+      - name: Deploy and verify the application
+        shell: pwsh
+        env:
+          CONTAINER_IMAGE: ${{ steps.publish.outputs.image }}
+        run: ./scripts/infra.ps1 -Mode Deploy -AzureCommand az
