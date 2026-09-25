@@ -48,12 +48,14 @@ if ($Mode -eq 'Destroy') {
 
 Invoke-Azure bicep build --file $template --stdout | Out-Null
 $image = $env:CONTAINER_IMAGE
+$apps = Invoke-Azure containerapp list --resource-group $resourceGroup --output json | ConvertFrom-Json
+$app = $apps | Where-Object name -eq 'ca-among-devs'
+if ($app -and $app.properties.provisioningState -ne 'Succeeded') {
+    throw 'Container App provisioning is not healthy.'
+}
 
 if ($Mode -in @('Preview', 'Health') -and -not $image) {
-    $apps = Invoke-Azure containerapp list --resource-group $resourceGroup --output json | ConvertFrom-Json
-    $app = $apps | Where-Object name -eq 'ca-among-devs'
     if ($app) {
-        if ($app.properties.provisioningState -ne 'Succeeded') { throw 'Container App provisioning is not healthy.' }
         $image = $app.properties.template.containers[0].image
         Write-Host 'Previewing the currently deployed image; no HTTP request or deployment is made.'
     } else {
@@ -70,13 +72,59 @@ if ($Mode -eq 'Deploy' -and $image -eq "$imageRepository`:validation") { throw '
 if ($image -ne "$imageRepository`:validation") {
     & (Join-Path $PSScriptRoot 'verify-image.ps1') -Image $image
 }
-$parameters = @("image=$image")
-Invoke-Azure deployment group what-if --name among-devs-preview --resource-group $resourceGroup --template-file $template --parameters @parameters
+
+function Get-CustomDomainBindings {
+    $json = Invoke-Azure containerapp show --name ca-among-devs --resource-group $resourceGroup --query properties.configuration.ingress.customDomains --output json
+    if (-not $json) { return @() }
+    return @(($json -join "`n" | ConvertFrom-Json) | Where-Object { $null -ne $_ })
+}
+
+$currentBindings = if ($app) { @(Get-CustomDomainBindings) } else { @() }
+$templateBindings = @($currentBindings | ForEach-Object {
+    $entry = @{ name = $_.name; bindingType = $_.bindingType }
+    if ($_.certificateId) { $entry.certificateId = $_.certificateId }
+    $entry
+})
+$parameters = @("image=$image", "customDomains=$(ConvertTo-Json -InputObject $templateBindings -Compress -Depth 5)")
+if ($Mode -ne 'Deploy' -or -not $app) {
+    Invoke-Azure deployment group what-if --name among-devs-preview --resource-group $resourceGroup --template-file $template --parameters @parameters
+}
 if ($Mode -ne 'Deploy') { exit 0 }
-Invoke-Azure stack group create --name $stackName --resource-group $resourceGroup --template-file $template --parameters @parameters --action-on-unmanage deleteAll --deny-settings-mode none --description 'Disposable Among Devs runtime resources.' --yes
+
+if ($app) {
+    # Update only the image. A full resource deployment can rewrite ingress settings;
+    # the Bicep parameter above also preserves bindings for infrastructure previews.
+    Invoke-Azure containerapp update --name ca-among-devs --resource-group $resourceGroup --image $image --output none
+} else {
+    Invoke-Azure stack group create --name $stackName --resource-group $resourceGroup --template-file $template --parameters @parameters --action-on-unmanage deleteAll --deny-settings-mode none --description 'Disposable Among Devs runtime resources.' --yes
+}
+
+foreach ($domain in @(
+    @{ Name = 'among-devs.dev'; Validation = 'HTTP' },
+    @{ Name = 'www.among-devs.dev'; Validation = 'CNAME' }
+)) {
+    $binding = Get-CustomDomainBindings | Where-Object name -eq $domain.Name | Select-Object -First 1
+    if (-not $binding) {
+        Invoke-Azure containerapp hostname add --name ca-among-devs --resource-group $resourceGroup --hostname $domain.Name --output none
+    }
+    if (-not $binding -or $binding.bindingType -eq 'Disabled' -or
+        ($binding.bindingType -ne 'Auto' -and -not $binding.certificateId)) {
+        Invoke-Azure containerapp hostname bind --name ca-among-devs --resource-group $resourceGroup --environment cae-among-devs-uks --hostname $domain.Name --validation-method $domain.Validation --output none
+    }
+    $binding = Get-CustomDomainBindings | Where-Object name -eq $domain.Name | Select-Object -First 1
+    if (-not $binding -or $binding.bindingType -notin @('SniEnabled', 'Auto')) {
+        throw "Custom domain $($domain.Name) has no secure binding after deployment."
+    }
+    Write-Host "Verified custom-domain binding for $($domain.Name)"
+}
+
 $fqdn = Invoke-Azure containerapp show --name ca-among-devs --resource-group $resourceGroup --query properties.configuration.ingress.fqdn --output tsv
 if ([string]::IsNullOrWhiteSpace($fqdn)) { throw 'Deployment returned no application hostname.' }
 $url = "https://$fqdn"
 & node (Join-Path $PSScriptRoot 'smoke.mjs') $url
 if ($LASTEXITCODE -ne 0) { throw 'Live smoke test failed; inspect the deployment logs.' }
+foreach ($domain in @('among-devs.dev', 'www.among-devs.dev')) {
+    & node (Join-Path $PSScriptRoot 'smoke-domain.mjs') "https://$domain"
+    if ($LASTEXITCODE -ne 0) { throw "Custom-domain smoke test failed for $domain." }
+}
 Write-Host "Deployed and verified $url"

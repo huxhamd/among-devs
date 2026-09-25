@@ -7,6 +7,9 @@ param image string
 param appName string = 'among-devs'
 param targetPort int = 3000
 
+@description('Existing custom-domain bindings. Deployment scripts must pass this explicitly to avoid deleting them.')
+param customDomains array
+
 resource environment 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: 'cae-${appName}-uks'
   location: location
@@ -36,6 +39,7 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
         targetPort: targetPort
         transport: 'auto'
         allowInsecure: false
+        customDomains: customDomains
       }
       registries: []
     }

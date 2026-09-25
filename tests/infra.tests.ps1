@@ -9,6 +9,8 @@ $global:infraTest_wrongTenant = $false
 $global:infraTest_tornDown = $false
 $global:infraTest_anonymousDenied = $false
 $global:infraTest_calls = [Collections.Generic.List[string]]::new()
+$global:infraTest_bindings = @()
+$global:infraTest_smokeUrls = [Collections.Generic.List[string]]::new()
 
 function az-play {
     $global:LASTEXITCODE = 0
@@ -23,7 +25,28 @@ function az-play {
                 '[{"name":"ca-among-devs","properties":{"provisioningState":"Succeeded","template":{"containers":[{"image":"' + $global:infraTest_digest + '"}]}}}]'
             }
         }
+        'containerapp show' {
+            if ($args -contains 'properties.configuration.ingress.customDomains') {
+                ConvertTo-Json -InputObject $global:infraTest_bindings -Compress -Depth 5
+            } elseif ($args -contains 'properties.configuration.ingress.fqdn') {
+                'ca-among-devs.example.azurecontainerapps.io'
+            } else { throw "Unexpected show query: $args" }
+        }
+        'containerapp update' { }
+        'containerapp hostname' {
+            $hostname = $args[[array]::IndexOf($args, '--hostname') + 1]
+            if ($args[2] -eq 'add') {
+                $global:infraTest_bindings += @{ name = $hostname; bindingType = 'Disabled' }
+            } elseif ($args[2] -eq 'bind') {
+                $global:infraTest_bindings = @($global:infraTest_bindings | Where-Object name -ne $hostname)
+                $global:infraTest_bindings += @{ name = $hostname; bindingType = 'SniEnabled'; certificateId = "/certificates/$hostname" }
+            } else { throw "Unexpected hostname command: $args" }
+        }
         'deployment group' { }
+        'stack group' {
+            if ($args[2] -eq 'create') { $global:infraTest_tornDown = $false }
+            else { throw "Unexpected stack command: $args" }
+        }
         default { throw "Unexpected Azure call: $args" }
     }
 }
@@ -32,6 +55,10 @@ function Invoke-RestMethod {
     @{ token = 'anonymous-test-token' }
 }
 function Invoke-WebRequest { @{ StatusCode = 200 } }
+function node {
+    $global:LASTEXITCODE = 0
+    $global:infraTest_smokeUrls.Add($args[$args.Count - 1])
+}
 function Expect-Failure([string] $Mode, [string] $Message) {
     $failed = $false
     try { & $infra -Mode $Mode } catch {
@@ -72,16 +99,54 @@ try {
     $env:CONTAINER_IMAGE = $null
 
     & $infra -Mode Health
-    if (-not ($global:infraTest_calls | Where-Object { $_ -like "deployment group what-if *image=$global:infraTest_digest" })) {
+    if (-not ($global:infraTest_calls | Where-Object { $_ -like "deployment group what-if *image=$global:infraTest_digest*customDomains=*" })) {
         throw 'Health did not preserve the deployed digest.'
     }
+
+    $env:CONTAINER_IMAGE = $global:infraTest_digest
+    & $infra -Mode Deploy
+    if (-not ($global:infraTest_calls | Where-Object { $_ -like "containerapp update *--image $global:infraTest_digest*" })) {
+        throw 'Existing app was not updated using the image-only command.'
+    }
+    if (@($global:infraTest_bindings | Where-Object bindingType -eq 'SniEnabled').Count -ne 2) {
+        throw 'Both custom domains were not securely bound.'
+    }
+    if (@($global:infraTest_calls | Where-Object { $_ -like 'containerapp hostname bind *' }).Count -ne 2) {
+        throw 'Missing custom domains were not bound using managed certificates.'
+    }
+    if ($global:infraTest_smokeUrls -notcontains 'https://among-devs.dev' -or
+        $global:infraTest_smokeUrls -notcontains 'https://www.among-devs.dev') {
+        throw 'Both custom domains were not smoke-tested.'
+    }
+    & $infra -Mode Deploy
+    if (@($global:infraTest_calls | Where-Object { $_ -like 'containerapp hostname bind *' }).Count -ne 2) {
+        throw 'An existing secure custom-domain binding was rebound.'
+    }
+    $env:CONTAINER_IMAGE = $null
+    & $infra -Mode Health
+    $preview = @($global:infraTest_calls | Where-Object { $_ -like 'deployment group what-if *' })[-1]
+    if ($preview -notlike '*among-devs.dev*' -or $preview -notlike '*certificateId*') {
+        throw 'Infrastructure preview did not preserve the current custom-domain bindings.'
+    }
+
     $global:infraTest_tornDown = $true
     & $infra -Mode Health
-    if (-not ($global:infraTest_calls | Where-Object { $_ -like '*image=ghcr.io/huxhamd/among-devs:validation' })) {
+    if (-not ($global:infraTest_calls | Where-Object { $_ -like '*image=ghcr.io/huxhamd/among-devs:validation*' })) {
         throw 'Torn-down health did not preview with the placeholder.'
     }
     if ($global:infraTest_calls | Where-Object { $_ -match '^acr |^stack ' }) { throw 'Unexpected mutation or ACR dependency.' }
-    Write-Host 'PASS: tenant, branch, fork, event, confirmation, digest, anonymous access and health checks.'
+
+    $global:infraTest_calls.Clear()
+    $global:infraTest_bindings = @()
+    $env:CONTAINER_IMAGE = $global:infraTest_digest
+    & $infra -Mode Deploy
+    if (-not ($global:infraTest_calls | Where-Object { $_ -like 'stack group create *' })) {
+        throw 'A torn-down app was not recreated by the deployment stack.'
+    }
+    if (@($global:infraTest_bindings | Where-Object bindingType -eq 'SniEnabled').Count -ne 2) {
+        throw 'A newly created app was not assigned both custom domains.'
+    }
+    Write-Host 'PASS: tenant, branch, fork, event, confirmation, digest, anonymous access, image-only deployment, managed domains, recreation and health checks.'
 } finally {
     foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
 }
