@@ -10,7 +10,13 @@ async function expectFittedGame(page: Page) {
   expect(documentSize.width).toBeLessThanOrEqual(size.width);
   expect(documentSize.height).toBeLessThanOrEqual(size.height);
   expect(documentSize.scroll).toBe(0);
-  for (const selector of ['.game-hud', '.map-panel', '.map-footer', '.task-panel']) {
+  for (const selector of [
+    '.game-hud',
+    '.map-panel',
+    '.map-footer',
+    '.task-panel',
+    '.actions-panel'
+  ]) {
     await expect(page.locator(selector)).toBeInViewport({ ratio: 1 });
   }
   for (const button of await page.locator('.context-actions button').all()) {
@@ -75,6 +81,10 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
     const roles = await Promise.all(pages.map((page) => page.locator('.role-tag').innerText()));
     const tester = pages[roles.findIndex((role) => role.includes('THE TESTER'))];
     const dev = pages.find((page) => page !== tester)!;
+    expect((await dev.locator('.context-actions').boundingBox())?.height).toBe(44);
+    expect((await tester.locator('.context-actions').boundingBox())?.height).toBeGreaterThanOrEqual(
+      200
+    );
     for (const viewport of [
       { width: 1366, height: 650 },
       { width: 1280, height: 600 },
@@ -89,6 +99,11 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
     }
     await tester.setViewportSize({ width: 1366, height: 650 });
     const mapBefore = await tester.locator('.map-panel').boundingBox();
+    const actionCardBefore = await tester.locator('.actions-panel').boundingBox();
+    const actionButtonBefore = await tester
+      .locator('.context-actions button.sabotage')
+      .first()
+      .boundingBox();
     const tickets = tester.getByRole('region', { name: 'Sprint tickets' });
     await tickets.focus();
     await tester.keyboard.press('End');
@@ -102,6 +117,12 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
     await expect(tester.locator('.ci-banner')).toHaveClass(/offline/);
     await expectFittedGame(tester);
     expect(await tester.locator('.map-panel').boundingBox()).toEqual(mapBefore);
+    expect((await tester.locator('.actions-panel').boundingBox())?.height).toBe(
+      actionCardBefore?.height
+    );
+    expect(
+      (await tester.locator('.context-actions button.sabotage').first().boundingBox())?.height
+    ).toBe(actionButtonBefore?.height);
     await tester.screenshot({ path: 'test-results/gameplay-laptop-ci-down.png' });
 
     for (const viewport of [
@@ -128,6 +149,13 @@ test('gameplay fits desktop viewports and keeps the HUD visible in scrolling lay
       expect(await tester.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         viewport.width
       );
+      if (viewport.width <= 760) {
+        const map = (await tester.locator('.map-panel').boundingBox())!;
+        const actions = (await tester.locator('.actions-panel').boundingBox())!;
+        const objectives = (await tester.locator('.task-panel').boundingBox())!;
+        expect(actions.y).toBeGreaterThanOrEqual(map.y + map.height);
+        expect(objectives.y).toBeGreaterThanOrEqual(actions.y + actions.height);
+      }
       await tester.locator('.context-actions button').last().scrollIntoViewIfNeeded();
       await expect(tester.locator('.game-hud')).toBeInViewport({ ratio: 1 });
     }

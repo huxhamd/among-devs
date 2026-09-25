@@ -1548,97 +1548,112 @@
                 ><span>OFFICE · FLOOR 01</span>
               </div>
             </section>
-            <aside class="panel task-panel">
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable tickets need keyboard access.) -->
-              <div class="task-details" role="region" aria-label="Sprint tickets" tabindex="0">
-                <div class="eyebrow">
-                  {session.role === 'tester' ? 'YOUR SECRET AGENDA' : 'YOUR SPRINT BACKLOG'}
+            <div class="play-sidebar">
+              <aside class="panel task-panel">
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable tickets need keyboard access.) -->
+                <div class="task-details" role="region" aria-label="Sprint tickets" tabindex="0">
+                  <div class="eyebrow">
+                    {session.role === 'tester' ? 'YOUR SECRET AGENDA' : 'YOUR SPRINT BACKLOG'}
+                  </div>
+                  <h2>
+                    {session.role === 'tester'
+                      ? 'Delay. Deflect. Repeat.'
+                      : 'Let’s ship something.'}
+                  </h2>
+                  <p>
+                    {session.role === 'tester'
+                      ? 'Blend in at workstations. Your tickets do not advance the release.'
+                      : !me?.active
+                        ? 'Training isn’t a holiday. Finish your tickets, but keep quiet on Teams.'
+                        : 'Visit each workstation and close your tickets.'}
+                  </p>
+                  <div class="task-list">
+                    {#each STATIONS as item}<div class:done={session.completed.includes(item.id)}>
+                        <span>{session.completed.includes(item.id) ? '✓' : '○'}</span>
+                        <div><strong>{item.name}</strong><small>{item.room}</small></div>
+                      </div>{/each}
+                  </div>
+                  <small class="muted"
+                    >Standups happen at the centre table.<br />Your camera is your poker face.{#if session.role === 'tester' && session.players.length === 3}<br
+                      />Three-person sprint: win by running out the clock.{/if}</small
+                  >
                 </div>
-                <h2>
-                  {session.role === 'tester' ? 'Delay. Deflect. Repeat.' : 'Let’s ship something.'}
-                </h2>
-                <p>
-                  {session.role === 'tester'
-                    ? 'Blend in at workstations. Your tickets do not advance the release.'
-                    : !me?.active
-                      ? 'Training isn’t a holiday. Finish your tickets, but keep quiet on Teams.'
-                      : 'Visit each workstation and close your tickets.'}
-                </p>
-                <div class="task-list">
-                  {#each STATIONS as item}<div class:done={session.completed.includes(item.id)}>
-                      <span>{session.completed.includes(item.id) ? '✓' : '○'}</span>
-                      <div><strong>{item.name}</strong><small>{item.room}</small></div>
-                    </div>{/each}
-                </div>
-                <small class="muted"
-                  >Standups happen at the centre table.<br />Your camera is your poker face.</small
-                >
-              </div>
-              <div class="context-actions">
-                {#if nearbyAccess || accessUse}
-                  <button class="secondary wide" disabled={!!accessUse} onclick={useAccess}
-                    >{accessLabel}</button
-                  >
-                  <small role="status"
-                    >{travelling
-                      ? 'In transit. You cannot see colleagues or take actions.'
-                      : 'Connects to the opposite wing. Entry and exit are visible.'}</small
-                  >
-                {/if}
-                {#if nearbyCupboard || cupboardUse}
-                  <button
-                    class="secondary wide"
-                    disabled={!!cupboardUse && !hidden}
-                    onclick={useCupboard}>{cupboardLabel}</button
-                  >
-                  {#if cupboardUse}<small role="status"
-                      >{hidden
-                        ? 'You are hidden. Visibility is halved. Leave to move or act.'
-                        : 'Colleagues can see you during entry and exit.'}</small
-                    >{/if}
-                {/if}
-                {#if report && me?.active}<button
-                    class="secondary wide"
-                    onclick={() => act({ type: 'report' })}>Report training notice • E</button
-                  >{:else if atConsole && session.incident}<button
-                    class="primary wide"
-                    disabled={!me?.active}
-                    onclick={openRepair}
-                    >{me?.active ? 'Repair CI • E' : 'Active colleague required'}</button
-                  >{/if}{#if nearby && !report}<button
-                    class="primary wide"
-                    disabled={session.completed.includes(nearby.id) || session.incident}
-                    onclick={openTask}
-                    >{session.completed.includes(nearby.id)
-                      ? 'Ticket already closed ✓'
-                      : 'Open ticket • E'}</button
-                  >{/if}{#if atTable && me?.active && !report}<button
-                    class="secondary wide"
-                    disabled={!session.meetingsLeft || session.incident}
-                    onclick={() => act({ type: 'meeting' })}
-                    >Call standup ({session.meetingsLeft} left) • E</button
-                  >{/if}{#if session.role === 'tester' && me?.active}<button
-                    class="sabotage wide"
-                    disabled={interactionLocked || session.incident || sabotageCooldown > 0}
-                    onclick={() => act({ type: 'sabotage' })}
-                    >{session.incident
-                      ? 'Repair CI before breaking it again'
-                      : sabotageCooldown
-                        ? `Break CI ready in ${sabotageCooldown}s`
-                        : 'Break CI • B'}</button
-                  >{#if session.players.length > 3}<button
+              </aside>
+              <aside
+                class="panel actions-panel"
+                class:two-action-slots={session.role === 'tester' && session.players.length === 3}
+                class:extra-action-slot={session.role === 'tester' && session.players.length > 3}
+                aria-label="Actions"
+              >
+                <div class="eyebrow">ACTIONS</div>
+                <div class="context-actions">
+                  {#if nearbyAccess || accessUse}
+                    <button class="secondary wide" disabled={!!accessUse} onclick={useAccess}
+                      >{accessLabel}</button
+                    >
+                  {/if}
+                  {#if nearbyCupboard || cupboardUse}
+                    <button
+                      class="secondary wide"
+                      disabled={!!cupboardUse && !hidden}
+                      onclick={useCupboard}>{cupboardLabel}</button
+                    >
+                  {/if}
+                  {#if report && me?.active}<button
+                      class="secondary wide"
+                      onclick={() => act({ type: 'report' })}>Report training notice • E</button
+                    >{:else if atConsole && session.incident}<button
+                      class="primary wide"
+                      disabled={!me?.active}
+                      onclick={openRepair}
+                      >{me?.active ? 'Repair CI • E' : 'Active colleague required'}</button
+                    >{/if}{#if nearby && !report}<button
+                      class="primary wide"
+                      disabled={session.completed.includes(nearby.id) || session.incident}
+                      onclick={openTask}
+                      >{session.completed.includes(nearby.id)
+                        ? 'Ticket already closed ✓'
+                        : 'Open ticket • E'}</button
+                    >{/if}{#if atTable && me?.active && !report}<button
+                      class="secondary wide"
+                      disabled={!session.meetingsLeft || session.incident}
+                      onclick={() => act({ type: 'meeting' })}
+                      >Call standup ({session.meetingsLeft} left) • E</button
+                    >{/if}{#if session.role === 'tester' && me?.active}<button
                       class="sabotage wide"
-                      disabled={!target || cooldown > 0}
-                      onclick={() => target && act({ type: 'sideline', target: target.id })}
-                      >{cooldown
-                        ? `Training ready in ${cooldown}s`
-                        : target
-                          ? `Send ${target.name} on training • T`
-                          : 'Move near a dev to send on training'}</button
-                    >{:else}<small>Three-person sprint: win by running out the clock.</small
-                    >{/if}{/if}
-              </div>
-            </aside>
+                      disabled={interactionLocked || session.incident || sabotageCooldown > 0}
+                      onclick={() => act({ type: 'sabotage' })}
+                      >{session.incident
+                        ? 'Repair CI before breaking it again'
+                        : sabotageCooldown
+                          ? `Break CI ready in ${sabotageCooldown}s`
+                          : 'Break CI • B'}</button
+                    >{#if session.players.length > 3}<button
+                        class="sabotage wide"
+                        disabled={!target || cooldown > 0}
+                        onclick={() => target && act({ type: 'sideline', target: target.id })}
+                        >{cooldown
+                          ? `Training ready in ${cooldown}s`
+                          : target
+                            ? `Send ${target.name} on training • T`
+                            : 'Move near a dev to send on training'}</button
+                      >{/if}{/if}
+                </div>
+                <small class="action-note" role="status">
+                  {#if accessUse || nearbyAccess}
+                    {travelling
+                      ? 'In transit. You cannot see colleagues or take actions.'
+                      : 'Connects to the opposite wing. Entry and exit are visible.'}
+                  {:else if cupboardUse}
+                    {hidden
+                      ? 'You are hidden. Visibility is halved. Leave to move or act.'
+                      : 'Colleagues can see you during entry and exit.'}
+                  {:else}
+                    Move near a workstation, colleague, or the centre table to find more actions.
+                  {/if}
+                </small>
+              </aside>
+            </div>
           </div>
         {/if}
       {/if}
