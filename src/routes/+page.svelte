@@ -1602,11 +1602,13 @@
                   {#if report && me?.active}<button
                       class="secondary wide"
                       onclick={() => act({ type: 'report' })}>Report training notice • E</button
-                    >{:else if atConsole && session.incident}<button
+                    >{:else if atConsole && (session.incident || session.role === 'dev')}<button
                       class="primary wide"
-                      disabled={!me?.active}
+                      disabled={!session.incident || !me?.active}
                       onclick={openRepair}
-                      >{me?.active ? 'Repair CI • E' : 'Active colleague required'}</button
+                      >{session.incident && !me?.active
+                        ? 'Active colleague required'
+                        : 'Repair CI • E'}</button
                     >{/if}{#if nearby && !report}<button
                       class="primary wide"
                       disabled={session.completed.includes(nearby.id) || session.incident}
@@ -1648,6 +1650,20 @@
                     {hidden
                       ? 'You are hidden. Visibility is halved. Leave to move or act.'
                       : 'Colleagues can see you during entry and exit.'}
+                  {:else if !report && atConsole && session.incident}
+                    {me?.active
+                      ? 'CI is down. Repair it here to restore tickets.'
+                      : 'An active colleague must repair CI.'}
+                  {:else if !report && atConsole && session.role === 'dev'}
+                    CI is operational. There is nothing to repair.
+                  {:else if !report && nearby && session.completed.includes(nearby.id)}
+                    This ticket is already closed.
+                  {:else if !report && nearby && session.incident}
+                    CI is down. Repair it at the control console before opening tickets.
+                  {:else if !report && atTable && me?.active && !session.meetingsLeft}
+                    You have no standups remaining.
+                  {:else if !report && atTable && me?.active && session.incident}
+                    CI is down. Repair it before calling a standup.
                   {:else}
                     Move near a workstation, colleague, or the centre table to find more actions.
                   {/if}
